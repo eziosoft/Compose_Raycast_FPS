@@ -13,22 +13,19 @@ import androidx.compose.ui.window.singleWindowApplication
 import kotlinx.coroutines.delay
 import kotlin.math.*
 
+
+
 const val W = 640
 const val H = 480
 const val FPS = 30
 
 const val MAP_X = 8
 const val MAP_Y = 8
-const val MAP_SCALE = 30f
+const val MAP_SCALE = 15f
 const val PLAYER_SIZE = 10.0
 
-const val ROTATION_STEP_DEGREE = 1f
+const val ROTATION_STEP_DEGREE = 2f
 const val MOVE_STEP = 1
-
-val MAX_FLOOR_CEILING_HEIGHT = 1000f // Maximum height for shading
-val MIN_FLOOR_CEILING_HEIGHT = 0f // Minimum height for shading
-val CEILING_COLOR = Color.LightGray
-val FLOOR_COLOR = Color.DarkGray
 
 val MAP = arrayOf(
     1, 1, 1, 1, 1, 1, 1, 1,
@@ -41,12 +38,22 @@ val MAP = arrayOf(
     1, 1, 1, 1, 1, 1, 1, 1,
 )
 
-var player = Player(100.0, 100.0, 0f)
+val white = Paint().apply {
+    color = Color.White
+    style = PaintingStyle.Fill
+}
+
+val black = Paint().apply {
+    color = Color.Black
+    style = PaintingStyle.Fill
+}
+
+var player = Player(50.0, 50.0, 0f)
 
 @Composable
 @Preview
 fun App() {
-    var frame by mutableStateOf(ImageBitmap(W, H))
+    var frame by remember { mutableStateOf(ImageBitmap(W, H)) }
 
     MaterialTheme {
         Image(
@@ -59,9 +66,8 @@ fun App() {
     }
 
     LaunchedEffect(Unit) {
-        println("LaunchedEffect")
         while (true) {
-            frame = updateFrame(player = player)
+            frame = updateFrame(player)
             delay(1000 / FPS.toLong())
         }
     }
@@ -71,9 +77,14 @@ fun updateFrame(player: Player): ImageBitmap {
     val bitmap = ImageBitmap(W, H)
     val canvas = Canvas(bitmap)
 
-    drawMap(canvas)
-    drawCeilingAndFloor(player, canvas)
+    canvas.drawRect(
+        paint = black,
+        rect = Rect(0f, 0f, W.toFloat(), H.toFloat())
+    )
+
+    drawCeilingAndFloor(canvas)
     drawRays(player, canvas)
+    drawMap(canvas)
     drawPlayer(canvas, player)
 
     return bitmap
@@ -106,66 +117,32 @@ fun drawPlayer(canvas: Canvas, player: Player) {
 }
 
 fun drawMap(canvas: Canvas) {
-    val white = Paint().apply {
-        color = Color.White
-        style = PaintingStyle.Fill
-    }
-
-    val black = Paint().apply {
-        color = Color.Black
-        style = PaintingStyle.Fill
-    }
-
-    val gray = Paint().apply {
-        color = Color.Gray
-        style = PaintingStyle.Fill
-    }
-
-    canvas.drawRect(
-        paint = black,
-        rect = Rect(0f, 0f, W.toFloat(), H.toFloat())
-    )
-
     for (y in 0 until MAP_Y) {
         for (x in 0 until MAP_X) {
-            if (MAP[y * MAP_X + x] == 1) {
-                canvas.drawRect(
-                    paint = white,
-                    rect = Rect(x * MAP_SCALE, y * MAP_SCALE, (x + 1) * MAP_SCALE - 1, (y + 1) * MAP_SCALE - 1)
-                )
-            } else {
-                canvas.drawRect(
-                    paint = black,
-                    rect = Rect(x * MAP_SCALE, y * MAP_SCALE, (x + 1) * MAP_SCALE - 1, (y + 1) * MAP_SCALE - 1)
-                )
-            }
+            val paint = if (MAP[y * MAP_X + x] == 1) white else black
+            canvas.drawRect(
+                paint = paint,
+                rect = Rect(x * MAP_SCALE, y * MAP_SCALE, (x + 1) * MAP_SCALE, (y + 1) * MAP_SCALE)
+            )
         }
     }
 }
 
 fun drawRays(player: Player, canvas: Canvas) {
-    val rayLength = 1000f // Maximum length of the ray
-    val numRays = W * 2 // Number of rays to cast
-    val fov = 30.0 // Field of view in degrees
-    val angleStep = Math.toRadians(fov / numRays) // Angle between each ray in radians
+    val rayLength = 1000f
+    val numRays = W
+    val fov = 30.0
+    val angleStep = Math.toRadians(fov / numRays)
     val playerAngle = player.rotationRad
-
-    // Aspect ratio correction factor
     val aspectRatio = H.toFloat() / W.toFloat()
 
-    // Define the maximum brightness and minimum brightness factors
-    val maxBrightness = 1.0
-    val minBrightness = 0.2 // Minimum brightness factor for the farthest wall
-
     for (i in 0 until numRays) {
-        // Calculate the angle of the ray relative to the player's direction
         val rayAngle = playerAngle - Math.toRadians(fov / 2) + i * angleStep
 
         var rayX = player.x
         var rayY = player.y
         var hit = false
         var distToWall = 0.0
-        var isVertical = false
 
         val deltaX = cos(rayAngle).toFloat()
         val deltaY = sin(rayAngle).toFloat()
@@ -176,11 +153,6 @@ fun drawRays(player: Player, canvas: Canvas) {
 
             if (mapX in 0 until MAP_X && mapY in 0 until MAP_Y && MAP[mapY * MAP_X + mapX] == 1) {
                 hit = true
-
-                // Check if hit is vertical or horizontal
-                val nextX = rayX + deltaX
-                val nextY = rayY + deltaY
-                isVertical = abs(nextX - rayX) < abs(nextY - rayY)
             } else {
                 rayX += deltaX
                 rayY += deltaY
@@ -188,47 +160,33 @@ fun drawRays(player: Player, canvas: Canvas) {
             }
         }
 
-        // Apply fisheye correction
         val correctedDistToWall = distToWall * cos(rayAngle - playerAngle).toFloat()
 
-        // Calculate the height of the wall based on the corrected distance
-        val wallHeight = (H / (correctedDistToWall * aspectRatio)).toFloat() // Scaling with aspect ratio
+        val wallHeight = (H / (correctedDistToWall * aspectRatio) * 10f).toFloat()
+        val wallTop = (H * 0.5f - wallHeight / 2)
+        val wallBottom = (H * 0.5f + wallHeight / 2)
 
-        val wallTop = (H * 0.5f - wallHeight / 2).toInt()
-        val wallBottom = (H * 0.5f + wallHeight / 2).toInt()
+        val clampedWallTop = wallTop.coerceAtLeast(0f)
+        val clampedWallBottom = wallBottom.coerceAtMost(H.toFloat())
 
-        // Ensure that the height is within the screen bounds
-        val clampedWallTop = wallTop.coerceAtLeast(0)
-        val clampedWallBottom = wallBottom.coerceAtMost(H)
-
-        // Calculate the brightness factor based on the distance
-        val brightnessFactor =
-            maxBrightness - (correctedDistToWall / rayLength * (maxBrightness - minBrightness)).coerceIn(
-                minBrightness,
-                maxBrightness
-            )
-
-        // Create a paint object with adjusted color brightness
-        val wallColor = if (isVertical) Color.Gray else Color.DarkGray
-        val adjustedColor = wallColor.copy(alpha = brightnessFactor.toFloat())
+        val brightnessFactor = (correctedDistToWall / 100).coerceIn(0.2, 0.5).toFloat()
+        val wallColor = Color(0.5f - brightnessFactor, 0.5f - brightnessFactor, 0.5f - brightnessFactor)
 
         canvas.drawRect(
             paint = Paint().apply {
-                color = adjustedColor
+                color = wallColor
                 style = PaintingStyle.Fill
             },
-            rect = Rect(i.toFloat(), clampedWallTop.toFloat(), i.toFloat() + 1, clampedWallBottom.toFloat())
+            rect = Rect(i.toFloat(), clampedWallTop, i.toFloat() + 1f, clampedWallBottom)
         )
     }
 }
 
+fun drawCeilingAndFloor(canvas: Canvas) {
+    for (y in 0 until H) {
+        val brightness = ((abs(H / 2 - y) / (H / 2f)) - 0.3f).coerceIn(0f, 1f)
+        val color = Color(brightness, brightness, brightness)
 
-fun drawCeilingAndFloor(player: Player, canvas: Canvas) {
-    // draw gradient rectangle sky
-
-    for (y in 0 until H / 2) {
-        val brightness = 1 - (y / (H / 2).toFloat())
-        val color = Color(0.5f, 0.5f, 0.5f, brightness)
         canvas.drawRect(
             paint = Paint().apply {
                 this.color = color
@@ -237,40 +195,38 @@ fun drawCeilingAndFloor(player: Player, canvas: Canvas) {
             rect = Rect(0f, y.toFloat(), W.toFloat(), y.toFloat() + 1)
         )
     }
-
 }
-
 
 fun main() = singleWindowApplication(
     onKeyEvent = {
         movePlayer(it.key.keyCode)
         false
-    },
+    }
 ) {
     App()
 }
 
 fun movePlayer(keyCode: Long) {
     when (keyCode) {
-        374199025664 -> {
+        374199025664 -> { // Right arrow key
             player = player.copy(
                 x = player.x + (MOVE_STEP * cos(player.rotationRad.toDouble())),
                 y = player.y + (MOVE_STEP * sin(player.rotationRad.toDouble()))
             )
         }
 
-        357019156480 -> {
+        357019156480 -> { // Left arrow key
             player = player.copy(
                 x = player.x - (MOVE_STEP * cos(player.rotationRad.toDouble())),
                 y = player.y - (MOVE_STEP * sin(player.rotationRad.toDouble()))
             )
         }
 
-        279709745152 -> {
+        279709745152 -> { // Up arrow key
             player = player.copy(rotationRad = player.rotationRad - ROTATION_STEP_DEGREE.toRadian())
         }
 
-        292594647040 -> {
+        292594647040 -> { // Down arrow key
             player = player.copy(rotationRad = player.rotationRad + ROTATION_STEP_DEGREE.toRadian())
         }
     }
@@ -279,9 +235,10 @@ fun movePlayer(keyCode: Long) {
 data class Player(
     val x: Double,
     val y: Double,
-    val rotationRad: Float,
+    val rotationRad: Float
 )
 
 fun Float.toRadian(): Float = (this / 180f * Math.PI).toFloat()
 fun Double.toRadian(): Double = (this / 180 * Math.PI)
 fun Float.toDegree(): Float = (this * 180f / Math.PI).toFloat()
+
