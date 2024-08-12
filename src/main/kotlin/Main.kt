@@ -19,24 +19,24 @@ import kotlinx.coroutines.delay
 import kotlin.math.*
 
 
-const val W = 1000
-const val H = 800
-const val FPS = 30
+private const val W = 1000
+private const val H = 800
+private const val FPS = 30
 
-const val MAP_X = 8
-const val MAP_Y = 8
-const val CELL_SIZE = 30f
-const val PLAYER_SIZE = 5f
+private const val MAP_X = 8
+private const val MAP_Y = 8
+private const val CELL_SIZE = 30f
+private const val PLAYER_SIZE = 5f
 
-val FOV_RAD = 60.toRadian()
+private val FOV_RAD = 60.toRadian()
 
 
-const val PI = 3.1415927f
+private const val PI = 3.1415927f
 
-val ROTATION_STEP_RAD = 2f.toRadian()
-const val MOVE_STEP = 1
+private val ROTATION_STEP_RAD = 2f.toRadian()
+private const val MOVE_STEP = 1
 
-val MAP = arrayOf(
+private val MAP = arrayOf(
     1, 1, 1, 1, 1, 1, 1, 1,
     1, 0, 1, 0, 0, 0, 1, 1,
     1, 0, 1, 0, 0, 0, 0, 1,
@@ -48,39 +48,74 @@ val MAP = arrayOf(
 )
 
 
-var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 90f.toRadian())
+private var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 90f.toRadian())
 
-val floorBrush = Brush.verticalGradient(
+private val floorBrush = Brush.verticalGradient(
     0f to Color(0xFF000000),
     1f to Color(0xFFAAAAAA)
 )
 
-val cellingBrush = Brush.verticalGradient(
+private val cellingBrush = Brush.verticalGradient(
     0f to Color(0xFFAAAAAA),
     1f to Color(0xFF000000)
 )
+
+private val white = Paint().apply {
+    color = Color.White
+    style = PaintingStyle.Fill
+}
+
+private val black = Paint().apply {
+    color = Color.Black
+    style = PaintingStyle.Fill
+}
+
+private val yellow = Paint().apply {
+    color = Color.Yellow
+    style = PaintingStyle.Fill
+}
+
+private val red = Paint().apply {
+    color = Color.Red
+    style = PaintingStyle.Fill
+}
+
+
+private val verticalColor = Color(0xFF0000FF)
+
+private val horizontalColor = Color(0xFF0000AA)
+
 
 @Composable
 @Preview
 fun App() {
     MaterialTheme {
-        RayTracer()
+        RayCaster()
     }
+}
 
-
+fun main() = singleWindowApplication(
+    onKeyEvent = {
+        movePlayer(it.key.keyCode)
+        false
+    }
+) {
+    App()
 }
 
 @Composable
-private fun RayTracer() {
+private fun RayCaster() {
     var frame by remember { mutableStateOf(ImageBitmap(W, H)) }
+
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
 
+        // background: floor and celling
         Column(modifier = Modifier.fillMaxSize()) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = cellingBrush))
             Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = floorBrush))
         }
 
-
+        // walls
         Image(
             modifier = Modifier.fillMaxSize(),
             bitmap = frame,
@@ -100,6 +135,7 @@ private fun RayTracer() {
     }
 
     LaunchedEffect(Unit) {
+        // game loop
         while (true) {
             frame = updateFrame(player)
             delay(1000 / FPS.toLong())
@@ -107,7 +143,7 @@ private fun RayTracer() {
     }
 }
 
-fun updateFrame(player: Player): ImageBitmap {
+private fun updateFrame(player: Player): ImageBitmap {
     val bitmap = ImageBitmap(W, H)
     val canvas = Canvas(bitmap)
 
@@ -118,7 +154,7 @@ fun updateFrame(player: Player): ImageBitmap {
     return bitmap
 }
 
-fun drawPlayer(canvas: Canvas, player: Player) {
+private fun drawPlayer(canvas: Canvas, player: Player) {
     canvas.drawRect(
         paint = yellow,
         rect = Rect(
@@ -132,14 +168,14 @@ fun drawPlayer(canvas: Canvas, player: Player) {
     canvas.drawLine(
         p1 = Offset(player.x, player.y),
         p2 = Offset(
-            (player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE*2),
-            (player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE*2)
+            (player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2),
+            (player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2)
         ),
         paint = yellow
     )
 }
 
-fun drawMap(canvas: Canvas) {
+private fun drawMap(canvas: Canvas) {
     for (y in 0 until MAP_Y) {
         for (x in 0 until MAP_X) {
             if (MAP[y * MAP_X + x] == 1) {
@@ -167,13 +203,8 @@ fun drawMap(canvas: Canvas) {
     }
 }
 
-
-val verticalColor = Color(0xFF0000FF)
-
-val horizontalColor = Color(0xFF0000AA)
-
 // Ray casting using DDA algorithm. Draw vertical and horizontal walls in different colors. Add fish-eye correction.
-fun castRays(player: Player, canvas: Canvas) {
+private fun castRays(player: Player, canvas: Canvas) {
     val rayCount = W
     val rayStep = FOV_RAD / rayCount
 
@@ -269,7 +300,7 @@ fun castRays(player: Player, canvas: Canvas) {
 }
 
 // Helper function to darken a color based on intensity
-fun darkenColor(color: Color, intensity: Float): Color {
+private fun darkenColor(color: Color, intensity: Float): Color {
     return Color(
         red = (color.red * intensity).coerceIn(0f, 1f),
         green = (color.green * intensity).coerceIn(0f, 1f),
@@ -279,7 +310,7 @@ fun darkenColor(color: Color, intensity: Float): Color {
 }
 
 
-fun movePlayer(keyCode: Long) {
+private fun movePlayer(keyCode: Long) {
     when (keyCode) {
         374199025664 -> { // Right arrow key
             player = player.copy(
@@ -305,44 +336,11 @@ fun movePlayer(keyCode: Long) {
     }
 }
 
-
-fun main() = singleWindowApplication(
-    onKeyEvent = {
-        movePlayer(it.key.keyCode)
-        false
-    }
-) {
-    App()
-}
-
-
 data class Player(
     val x: Float,
     val y: Float,
     val rotationRad: Float
 )
-
-
-val white = Paint().apply {
-    color = Color.White
-    style = PaintingStyle.Fill
-}
-
-val black = Paint().apply {
-    color = Color.Black
-    style = PaintingStyle.Fill
-}
-
-val yellow = Paint().apply {
-    color = Color.Yellow
-    style = PaintingStyle.Fill
-}
-
-val red = Paint().apply {
-    color = Color.Red
-    style = PaintingStyle.Fill
-}
-
 
 fun Float.toRadian(): Float = this * PI / 180f
 fun Int.toRadian(): Float = this.toFloat() * PI / 180f
