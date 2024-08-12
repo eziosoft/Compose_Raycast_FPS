@@ -19,15 +19,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.singleWindowApplication
 import kotlinx.coroutines.delay
 import kotlin.math.*
+import kotlin.time.DurationUnit
+import kotlin.time.measureTime
 
 
-private const val W = 1000
-private const val H = 800
+private const val W = 640
+private const val H = 480
 private const val FPS = 30
 
 private const val MAP_X = 8
 private const val MAP_Y = 8
-private const val CELL_SIZE = 30f
+private const val CELL_SIZE = 5f
 private const val PLAYER_SIZE = 5f
 
 private val FOV_RAD = 60.toRadian()
@@ -36,11 +38,11 @@ private val FOV_RAD = 60.toRadian()
 private const val PI = 3.1415927f
 
 private val ROTATION_STEP_RAD = 2f.toRadian()
-private const val MOVE_STEP = 1
+private const val MOVE_STEP = 0.5f
 
 private val MAP = arrayOf(
     1, 1, 1, 1, 1, 1, 1, 1,
-    1, 0, 1, 0, 0, 0, 1, 1,
+    1, 0, 1, 0, 0, 0, 2, 1,
     1, 0, 1, 0, 0, 0, 0, 1,
     1, 0, 1, 0, 0, 0, 0, 1,
     1, 0, 1, 0, 1, 0, 0, 1,
@@ -48,6 +50,8 @@ private val MAP = arrayOf(
     1, 0, 0, 0, 0, 0, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 1,
 )
+
+private var wallTexture = arrayOf(1, 0, 1, 0, 1, 0, 2, 0)
 
 
 private var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 90f.toRadian())
@@ -131,7 +135,7 @@ private fun RayCaster() {
             bitmap = frame,
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
-            filterQuality = FilterQuality.None,
+            filterQuality = FilterQuality.Medium,
         )
 
         // pistol
@@ -151,18 +155,40 @@ private fun RayCaster() {
 //        )
     }
 
+
+
     LaunchedEffect(Unit) {
+
+        var timer = 0
         // game loop
         while (true) {
+            val renderTime = measureTime {
+                if (timer < 5) {
+                    wallTexture[6] = 2
+                } else {
+                    wallTexture[6] = 0
+                }
 
-            if(pressedKeys.isNotEmpty()){
-                pistolOffset = 20-10* sin((player.x+player.y)/10)
+                timer++
+                if (timer > 10) timer = 0
+
+                if (pressedKeys.isNotEmpty()) {
+                    pistolOffset = 20 - 10 * sin((player.x + player.y) / 10)
+                }
+
+
+                movePlayer(pressedKeys) // Call movePlayer every frame
+                frame = updateFrame(player)
+
             }
+            delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
 
 
-            movePlayer(pressedKeys) // Call movePlayer every frame
-            frame = updateFrame(player)
-            delay(1000 / FPS.toLong())
+            println("render time: $renderTime")
+
+//            delay(1)
+
+
         }
     }
 }
@@ -177,6 +203,7 @@ private fun updateFrame(player: Player): ImageBitmap {
 
     return bitmap
 }
+
 
 private fun drawPlayer(canvas: Canvas, player: Player) {
     canvas.drawRect(
@@ -202,7 +229,7 @@ private fun drawPlayer(canvas: Canvas, player: Player) {
 private fun drawMap(canvas: Canvas) {
     for (y in 0 until MAP_Y) {
         for (x in 0 until MAP_X) {
-            if (MAP[y * MAP_X + x] == 1) {
+            if (MAP[y * MAP_X + x] > 0) {
                 canvas.drawRect(
                     paint = white,
                     rect = Rect(
@@ -249,6 +276,7 @@ private fun castRays(player: Player, canvas: Canvas) {
         val stepX: Int
         val stepY: Int
 
+
         if (cosAngle < 0) {
             stepX = -1
             sideDistX = (player.x / CELL_SIZE - mapX) * deltaDistX
@@ -280,6 +308,7 @@ private fun castRays(player: Player, canvas: Canvas) {
             }
 
             if (MAP[mapY * MAP_X + mapX] > 0) hit = true
+
         }
 
         var perpWallDist: Float
@@ -297,29 +326,33 @@ private fun castRays(player: Player, canvas: Canvas) {
         val drawEnd = lineHeight / 2 + H / 2
 
         // Calculate color intensity based on distance
-        val intensity = (1 - (correctedDist / (MAP_X))).coerceIn(0f, 1f)
+        val intensity = if (side == 0) (1 - (correctedDist / (MAP_X))).coerceIn(
+            0f,
+            1f
+        ) else (0.8f - (correctedDist / (MAP_Y))).coerceIn(0f, 1f)
 
-        val paint: Paint = if (side == 0) {
-            Paint().apply {
-                color = darkenColor(verticalColor, intensity)
-            }
 
-        } else {
-            Paint().apply {
-                color = darkenColor(horizontalColor, intensity)
-            }
+        val scale = lineHeight / (wallTexture.size)
+
+
+        for (y in 0 until drawEnd - drawStart) {
+            val c = (y / scale).coerceIn(0, wallTexture.size - 1)
+
+
+            canvas.drawPoints(
+                pointMode = PointMode.Points,
+                points = listOf(
+                    Offset(i.toFloat(), drawStart + y.toFloat())
+                ),
+                paint = Paint().apply {
+                    color = if (wallTexture[c] == 1) darkenColor(
+                        Color.White,
+                        intensity
+                    ) else if (wallTexture[c] == 2) darkenColor(Color.Red, intensity) else Color.Black
+                }
+            )
         }
 
-
-        canvas.drawRect(
-            paint = paint,
-            rect = Rect(
-                i.toFloat(),
-                drawStart.toFloat(),
-                i.toFloat() + 1,
-                drawEnd.toFloat()
-            )
-        )
     }
 }
 
