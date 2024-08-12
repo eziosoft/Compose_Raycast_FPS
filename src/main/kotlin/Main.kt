@@ -25,7 +25,7 @@ const val FPS = 30
 
 const val MAP_X = 8
 const val MAP_Y = 8
-const val CELL_SIZE = 10f
+const val CELL_SIZE = 30f
 const val PLAYER_SIZE = 5f
 
 val FOV_RAD = 60.toRadian()
@@ -63,25 +63,40 @@ val cellingBrush = Brush.verticalGradient(
 @Composable
 @Preview
 fun App() {
-    var frame by remember { mutableStateOf(ImageBitmap(W, H)) }
-
     MaterialTheme {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = cellingBrush))
-                Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = floorBrush))
-            }
+        RayTracer()
+    }
 
 
-            Image(
-                modifier = Modifier.fillMaxSize(),
-                bitmap = frame,
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
-                filterQuality = FilterQuality.None,
-            )
+}
+
+@Composable
+private fun RayTracer() {
+    var frame by remember { mutableStateOf(ImageBitmap(W, H)) }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+
+        Column(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = cellingBrush))
+            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = floorBrush))
         }
+
+
+        Image(
+            modifier = Modifier.fillMaxSize(),
+            bitmap = frame,
+            contentDescription = null,
+            contentScale = ContentScale.FillBounds,
+            filterQuality = FilterQuality.None,
+        )
+
+        Dpad(
+            modifier = Modifier.align(Alignment.BottomEnd),
+            onUp = { movePlayer(374199025664) },
+            onDown = { movePlayer(357019156480) },
+            onLeft = { movePlayer(279709745152) },
+            onRight = { movePlayer(292594647040) },
+            onCenter = { }
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -107,18 +122,18 @@ fun drawPlayer(canvas: Canvas, player: Player) {
     canvas.drawRect(
         paint = yellow,
         rect = Rect(
-            (player.x - PLAYER_SIZE / 2).toFloat(),
-            (player.y - PLAYER_SIZE / 2).toFloat(),
-            (player.x + PLAYER_SIZE / 2).toFloat(),
-            (player.y + PLAYER_SIZE / 2).toFloat()
+            (player.x - PLAYER_SIZE / 2),
+            (player.y - PLAYER_SIZE / 2),
+            (player.x + PLAYER_SIZE / 2),
+            (player.y + PLAYER_SIZE / 2)
         )
     )
 
     canvas.drawLine(
-        p1 = Offset(player.x.toFloat(), player.y.toFloat()),
+        p1 = Offset(player.x, player.y),
         p2 = Offset(
-            (player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE).toFloat(),
-            (player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE).toFloat()
+            (player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE*2),
+            (player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE*2)
         ),
         paint = yellow
     )
