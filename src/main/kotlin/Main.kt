@@ -1,10 +1,7 @@
 import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -12,8 +9,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.loadImageBitmap
+import androidx.compose.ui.res.useResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.singleWindowApplication
 import kotlinx.coroutines.delay
 import kotlin.math.*
@@ -94,9 +96,15 @@ fun App() {
     }
 }
 
+private val pressedKeys = mutableSetOf<Long>()
+
 fun main() = singleWindowApplication(
-    onKeyEvent = {
-        movePlayer(it.key.keyCode)
+    onKeyEvent = { event ->
+        when (event.type) {
+            KeyEventType.KeyDown -> pressedKeys.add(event.key.keyCode)
+            KeyEventType.KeyUp -> pressedKeys.remove(event.key.keyCode)
+        }
+        movePlayer(pressedKeys)
         false
     }
 ) {
@@ -106,6 +114,8 @@ fun main() = singleWindowApplication(
 @Composable
 private fun RayCaster() {
     var frame by remember { mutableStateOf(ImageBitmap(W, H)) }
+
+    var pistolOffset by remember { mutableStateOf(0f) }
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
 
@@ -124,19 +134,33 @@ private fun RayCaster() {
             filterQuality = FilterQuality.None,
         )
 
-        Dpad(
-            modifier = Modifier.align(Alignment.BottomEnd),
-            onUp = { movePlayer(374199025664) },
-            onDown = { movePlayer(357019156480) },
-            onLeft = { movePlayer(279709745152) },
-            onRight = { movePlayer(292594647040) },
-            onCenter = { }
+        // pistol
+        Image(
+            modifier = Modifier.align(Alignment.BottomCenter).size(200.dp).offset(y = pistolOffset.toInt().dp),
+            bitmap = useResource("pistol.webp") { loadImageBitmap(it) },
+            contentDescription = null,
         )
+
+//        Dpad(
+//            modifier = Modifier.align(Alignment.BottomEnd),
+//            onUp = { movePlayer(374199025664) },
+//            onDown = { movePlayer(357019156480) },
+//            onLeft = { movePlayer(279709745152) },
+//            onRight = { movePlayer(292594647040) },
+//            onCenter = { }
+//        )
     }
 
     LaunchedEffect(Unit) {
         // game loop
         while (true) {
+
+            if(pressedKeys.isNotEmpty()){
+                pistolOffset = 20-10* sin((player.x+player.y)/10)
+            }
+
+
+            movePlayer(pressedKeys) // Call movePlayer every frame
             frame = updateFrame(player)
             delay(1000 / FPS.toLong())
         }
@@ -309,30 +333,53 @@ private fun darkenColor(color: Color, intensity: Float): Color {
     )
 }
 
+private fun isWall(x: Float, y: Float): Boolean {
+    val mapX = (x / CELL_SIZE).toInt()
+    val mapY = (y / CELL_SIZE).toInt()
+    return if (mapX in 0 until MAP_X && mapY in 0 until MAP_Y) {
+        MAP[mapY * MAP_X + mapX] == 1
+    } else {
+        true // Treat out-of-bounds as walls
+    }
+}
 
-private fun movePlayer(keyCode: Long) {
-    when (keyCode) {
-        374199025664 -> { // Right arrow key
-            player = player.copy(
-                x = player.x + (MOVE_STEP * cos(player.rotationRad)),
-                y = player.y + (MOVE_STEP * sin(player.rotationRad))
-            )
-        }
 
-        357019156480 -> { // Left arrow key
-            player = player.copy(
-                x = player.x - (MOVE_STEP * cos(player.rotationRad)),
-                y = player.y - (MOVE_STEP * sin(player.rotationRad))
-            )
-        }
+private fun movePlayer(pressedKeys: Set<Long>) {
+    var dx = 0f
+    var dy = 0f
+    var dr = 0f
 
-        279709745152 -> { // Up arrow key
-            player = player.copy(rotationRad = (player.rotationRad - ROTATION_STEP_RAD))
-        }
+    if (374199025664 in pressedKeys) { // Right arrow key
+        dx += MOVE_STEP * cos(player.rotationRad)
+        dy += MOVE_STEP * sin(player.rotationRad)
+    }
+    if (357019156480 in pressedKeys) { // Left arrow key
+        dx -= MOVE_STEP * cos(player.rotationRad)
+        dy -= MOVE_STEP * sin(player.rotationRad)
+    }
+    if (279709745152 in pressedKeys) { // Up arrow key
+        dr -= ROTATION_STEP_RAD
+    }
+    if (292594647040 in pressedKeys) { // Down arrow key
+        dr += ROTATION_STEP_RAD
+    }
 
-        292594647040 -> { // Down arrow key
-            player = player.copy(rotationRad = player.rotationRad + ROTATION_STEP_RAD)
-        }
+    // Apply rotation
+    val newRotation = player.rotationRad + dr
+    player = player.copy(rotationRad = newRotation)
+
+    // Apply movement with collision detection
+    val newX = player.x + dx
+    val newY = player.y + dy
+
+    // Check X movement
+    if (!isWall(newX, player.y)) {
+        player = player.copy(x = newX)
+    }
+
+    // Check Y movement
+    if (!isWall(player.x, newY)) {
+        player = player.copy(y = newY)
     }
 }
 
