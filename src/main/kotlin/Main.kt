@@ -18,6 +18,7 @@ import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.singleWindowApplication
 import kotlinx.coroutines.delay
+import java.awt.image.BufferedImage
 import kotlin.math.*
 import kotlin.time.DurationUnit
 import kotlin.time.measureTime
@@ -25,6 +26,7 @@ import kotlin.time.measureTime
 
 private const val W = 640
 private const val H = 480
+
 private const val FPS = 30
 
 private const val MAP_X = 8
@@ -54,7 +56,7 @@ private val MAP = arrayOf(
 private var wallTexture = arrayOf(1, 0, 1, 0, 1, 0, 2, 0)
 
 
-private var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 90f.toRadian())
+private var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 0f.toRadian())
 
 private val floorBrush = Brush.verticalGradient(
     0f to Color(0xFF000000),
@@ -85,11 +87,6 @@ private val red = Paint().apply {
     color = Color.Red
     style = PaintingStyle.Fill
 }
-
-
-private val verticalColor = Color(0xFF0000FF)
-
-private val horizontalColor = Color(0xFF0000AA)
 
 
 @Composable
@@ -135,7 +132,7 @@ private fun RayCaster() {
             bitmap = frame,
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
-            filterQuality = FilterQuality.Medium,
+            filterQuality = FilterQuality.None,
         )
 
         // pistol
@@ -183,25 +180,24 @@ private fun RayCaster() {
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
 
-
             println("render time: $renderTime")
-
-//            delay(1)
-
-
         }
     }
 }
 
-private fun updateFrame(player: Player): ImageBitmap {
-    val bitmap = ImageBitmap(W, H)
-    val canvas = Canvas(bitmap)
 
-    castRays(player, canvas)
+private fun updateFrame(player: Player): ImageBitmap {
+    val bitmap = BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB)
+
+
+    castRays(player, bitmap)
+
+    val composeBitmap = bitmap.toComposeImageBitmap()
+    val canvas = Canvas(composeBitmap)
     drawMap(canvas)
     drawPlayer(canvas, player)
 
-    return bitmap
+    return composeBitmap
 }
 
 
@@ -255,7 +251,7 @@ private fun drawMap(canvas: Canvas) {
 }
 
 // Ray casting using DDA algorithm. Draw vertical and horizontal walls in different colors. Add fish-eye correction.
-private fun castRays(player: Player, canvas: Canvas) {
+private fun castRays(player: Player, bitmap: BufferedImage) {
     val rayCount = W
     val rayStep = FOV_RAD / rayCount
 
@@ -338,22 +334,33 @@ private fun castRays(player: Player, canvas: Canvas) {
         for (y in 0 until drawEnd - drawStart) {
             val c = (y / scale).coerceIn(0, wallTexture.size - 1)
 
+            val color =
+                if (wallTexture[c] == 1) darkenColor(Color.White, intensity) else
+                    if (wallTexture[c] == 2) darkenColor(Color.Red, intensity) else Color.Black
 
-            canvas.drawPoints(
-                pointMode = PointMode.Points,
-                points = listOf(
-                    Offset(i.toFloat(), drawStart + y.toFloat())
-                ),
-                paint = Paint().apply {
-                    color = if (wallTexture[c] == 1) darkenColor(
-                        Color.White,
-                        intensity
-                    ) else if (wallTexture[c] == 2) darkenColor(Color.Red, intensity) else Color.Black
-                }
-            )
+            val xx = i
+            val yy = drawStart + y
+
+            if (xx in 0 until W && yy in 0 until H)
+                bitmap.setRGB(xx, yy, color.toArgb())
+
+
+//            canvas.drawPoints(
+//                pointMode = PointMode.Points,
+//                points = listOf(
+//                    Offset(i.toFloat(), drawStart + y.toFloat())
+//                ),
+//                paint = Paint().apply {
+//                    color = if (wallTexture[c] == 1) darkenColor(
+//                        Color.White,
+//                        intensity
+//                    ) else if (wallTexture[c] == 2) darkenColor(Color.Red, intensity) else Color.Black
+//                }
+//            )
         }
 
     }
+
 }
 
 // Helper function to darken a color based on intensity
