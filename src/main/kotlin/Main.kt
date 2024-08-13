@@ -18,6 +18,7 @@ import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.singleWindowApplication
 import kotlinx.coroutines.delay
+import java.awt.Graphics
 import java.awt.image.BufferedImage
 import kotlin.math.*
 import kotlin.time.DurationUnit
@@ -31,7 +32,7 @@ private const val FPS = 30
 
 private const val MAP_X = 8
 private const val MAP_Y = 8
-private const val CELL_SIZE = 5f
+private const val CELL_SIZE = 5
 private const val PLAYER_SIZE = 5f
 
 private val FOV_RAD = 60.toRadian()
@@ -56,7 +57,7 @@ private val MAP = arrayOf(
 private var wallTexture = arrayOf(1, 0, 1, 0, 1, 0, 2, 0)
 
 
-private var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 0f.toRadian())
+private var player = Player(CELL_SIZE + CELL_SIZE / 2f, CELL_SIZE + CELL_SIZE / 2f, 0f.toRadian())
 
 private val floorBrush = Brush.verticalGradient(
     0f to Color(0xFF000000),
@@ -186,68 +187,58 @@ private fun RayCaster() {
 }
 
 
+
 private fun updateFrame(player: Player): ImageBitmap {
     val bitmap = BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB)
 
-
     castRays(player, bitmap)
+    drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player)
 
-    val composeBitmap = bitmap.toComposeImageBitmap()
-    val canvas = Canvas(composeBitmap)
-    drawMap(canvas)
-    drawPlayer(canvas, player)
-
-    return composeBitmap
+    return bitmap.toComposeImageBitmap()
 }
 
 
-private fun drawPlayer(canvas: Canvas, player: Player) {
-    canvas.drawRect(
-        paint = yellow,
-        rect = Rect(
-            (player.x - PLAYER_SIZE / 2),
-            (player.y - PLAYER_SIZE / 2),
-            (player.x + PLAYER_SIZE / 2),
-            (player.y + PLAYER_SIZE / 2)
-        )
+private fun drawPlayer(g: Graphics, player: Player, xOffset: Int, yOffset: Int) {
+    g.color = java.awt.Color(255, 255, 0)
+
+    g.fillOval(
+        xOffset + (player.x - PLAYER_SIZE / 2).toInt(),
+        yOffset + (player.y - PLAYER_SIZE / 2).toInt(),
+        PLAYER_SIZE.toInt(),
+        PLAYER_SIZE.toInt()
     )
 
-    canvas.drawLine(
-        p1 = Offset(player.x, player.y),
-        p2 = Offset(
-            (player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2),
-            (player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2)
-        ),
-        paint = yellow
+    g.drawLine(
+        xOffset + player.x.toInt(),
+        yOffset + player.y.toInt(),
+        (xOffset+player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2).toInt(),
+        (yOffset+player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2).toInt()
     )
 }
 
-private fun drawMap(canvas: Canvas) {
-    for (y in 0 until MAP_Y) {
+private fun drawMap(bitmap: BufferedImage, xx: Int, yy: Int, player: Player) {
+
+    val g = bitmap.graphics
+    for (y: Int in 0 until MAP_Y) {
         for (x in 0 until MAP_X) {
             if (MAP[y * MAP_X + x] > 0) {
-                canvas.drawRect(
-                    paint = white,
-                    rect = Rect(
-                        (x * CELL_SIZE),
-                        (y * CELL_SIZE),
-                        ((x + 1) * CELL_SIZE),
-                        ((y + 1) * CELL_SIZE)
-                    )
-                )
+                g.color = java.awt.Color(255, 255, 255)
             } else {
-                canvas.drawRect(
-                    paint = black,
-                    rect = Rect(
-                        (x * CELL_SIZE),
-                        (y * CELL_SIZE),
-                        ((x + 1) * CELL_SIZE),
-                        ((y + 1) * CELL_SIZE)
-                    )
-                )
+                g.color = java.awt.Color(0, 0, 0)
             }
+
+            g.fillRect(
+                xx + x * CELL_SIZE,
+                yy + y * CELL_SIZE,
+                CELL_SIZE,
+                CELL_SIZE
+            )
         }
     }
+
+    drawPlayer(g, player, xOffset = xx, yOffset = yy)
+
+    g.dispose()
 }
 
 // Ray casting using DDA algorithm. Draw vertical and horizontal walls in different colors. Add fish-eye correction.
