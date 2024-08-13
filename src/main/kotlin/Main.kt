@@ -54,7 +54,7 @@ private val MAP = arrayOf(
 private var wallTexture = arrayOf(1, 0, 1, 0, 1, 0, 2, 0)
 
 
-private var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 90f.toRadian())
+private var player = Player(CELL_SIZE + CELL_SIZE / 2, CELL_SIZE + CELL_SIZE / 2, 0f.toRadian())
 
 private val floorBrush = Brush.verticalGradient(
     0f to Color(0xFF000000),
@@ -338,6 +338,11 @@ private fun castRays(player: Player, canvas: Canvas) {
         for (y in 0 until drawEnd - drawStart) {
             val c = (y / scale).coerceIn(0, wallTexture.size - 1)
 
+
+            val xx = i.toFloat()
+            val yy = drawStart + y.toFloat()
+
+            if(xx < 0 || xx >= W || yy < 0 || yy >= H) continue
 
             canvas.drawPoints(
                 pointMode = PointMode.Points,
