@@ -11,11 +11,11 @@ import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import java.awt.Graphics
 import java.awt.image.BufferedImage
 import java.lang.Math.random
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.time.DurationUnit
 import kotlin.time.measureTime
@@ -68,11 +68,13 @@ private var player = Player(CELL_SIZE + CELL_SIZE / 2f, CELL_SIZE + CELL_SIZE / 
 
 private val floorBrush = Brush.verticalGradient(
     0f to Color(0xFF000000),
+    0.4f to Color(0xFF111111),
     1f to Color(0xFF777755)
 )
 
 private val cellingBrush = Brush.verticalGradient(
     0f to Color(0xFF335555),
+    0.4f to Color(0xFF111111),
     1f to Color(0xFF000000)
 )
 
@@ -257,7 +259,6 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
         val stepX: Int
         val stepY: Int
 
-
         if (cosAngle < 0) {
             stepX = -1
             sideDistX = (player.x / CELL_SIZE - mapX) * deltaDistX
@@ -289,7 +290,6 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
             }
 
             if (MAP[mapY * MAP_X + mapX] > 0) hit = true
-
         }
 
         var perpWallDist: Float
@@ -299,36 +299,52 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
             perpWallDist = (mapY - player.y / CELL_SIZE + (1 - stepY) / 2) / sinAngle
         }
 
-        // Fish-eye correction
-        val correctedDist = perpWallDist * cos(rayAngle - player.rotationRad)
+        // Calculate wall X coordinate (for texture mapping)
+        var wallX: Float
+        if (side == 0) {
+            wallX = player.y + perpWallDist * sinAngle
+        } else {
+            wallX = player.x + perpWallDist * cosAngle
+        }
+        wallX -= floor(wallX)
 
-        val lineHeight = (H / correctedDist).toInt()
-        val drawStart = -lineHeight / 2 + H / 2
-        val drawEnd = lineHeight / 2 + H / 2
+        // Adjust line height calculation
+        val lineHeight = (H / (perpWallDist * cos(rayAngle - player.rotationRad))).toInt()
+        var drawStart = -lineHeight / 2 + H / 2
+        var drawEnd = lineHeight / 2 + H / 2
+
+        // Calculate the actual start and end points for drawing
+        val actualDrawStart = drawStart.coerceAtLeast(0)
+        val actualDrawEnd = drawEnd.coerceAtMost(H - 1)
 
         // Calculate color intensity based on distance
         val intensity = if (side == 0) {
-            (1 - (correctedDist * correctedDist / (MAP_X))).coerceIn(0f, 1f)
+            (1 - (perpWallDist * perpWallDist / (MAP_X))).coerceIn(0f, 1f)
         } else {
-            (0.8f - (correctedDist * correctedDist / (MAP_Y))).coerceIn(0f, 1f)
+            (0.8f - (perpWallDist * perpWallDist / (MAP_Y))).coerceIn(0f, 1f)
         }
 
+        // Draw the wall slice
+        for (y in actualDrawStart until actualDrawEnd) {
+            // Calculate texture Y coordinate
+            val texY = ((y - drawStart).toFloat() / lineHeight * wallTexture.size).toInt().coerceIn(0, wallTexture.size - 1)
 
-        val scale = lineHeight / (wallTexture.size)
+            // Use wallX to determine which vertical strip of the texture to use
+            val texX = (wallX * wallTexture.size).toInt()
 
+            // Get color from texture
+            val texValue = wallTexture[texY]
 
-        for (y in 0 until drawEnd - drawStart) {
-            val c = (y / scale).coerceIn(0, wallTexture.size - 1)
+            // Apply color based on texture value
+            val color = when (texValue) {
+                1 -> darkenColor(Color.Gray, intensity)
+                2 -> darkenColor(Color.Red, intensity)
+                else -> Color.Black
+            }
 
-            val color =
-                if (wallTexture[c] == 1) darkenColor(Color.Gray, intensity) else
-                    if (wallTexture[c] == 2) darkenColor(Color.Red, intensity) else Color.Black
-
-            val xx = i
-            val yy = drawStart + y
-
-            if (xx in 0 until W && yy in 0 until H)
-                bitmap.setRGB(xx, yy, color.toArgb())
+            if (i in 0 until W && y in 0 until H) {
+                bitmap.setRGB(i, y, color.toArgb())
+            }
         }
     }
 }
