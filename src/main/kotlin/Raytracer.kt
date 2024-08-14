@@ -12,6 +12,7 @@ import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import org.jetbrains.skia.ImageFilter
 import java.awt.image.BufferedImage
 import java.lang.Math.random
 import kotlin.math.abs
@@ -20,6 +21,8 @@ import kotlin.math.floor
 import kotlin.math.sin
 import kotlin.time.DurationUnit
 import kotlin.time.measureTime
+import org.jetbrains.skia.RuntimeEffect
+import org.jetbrains.skia.RuntimeShaderBuilder
 
 
 val pressedKeys = mutableSetOf<Long>()
@@ -91,19 +94,17 @@ fun RayCaster() {
             Image(
                 modifier = Modifier.fillMaxSize().aspectRatio(1f)
                     .graphicsLayer(
-                        scaleX = 4f,
-                        scaleY = 4f,
-                        rotationX = -45f,
+                        scaleX = 20f,
+                        scaleY = 20f,
+                        rotationX = -25f,
                         rotationZ = (player.rotationRad * 180 / PI),
-                        translationY = -H.toFloat()
+                        translationY = -H*2.toFloat()
                     ),
                 bitmap = useResource("sky4.jpg") { loadImageBitmap(it) },
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
 
             )
-//            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = cellingBrush))
-//            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = floorBrush))
         }
 
         // walls
