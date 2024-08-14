@@ -61,7 +61,6 @@ fun generateMap(): Array<Int> {
     return map
 }
 
-private var wallTexture = arrayOf(1, 0, 1, 0, 1, 0, 2, 0)
 
 
 private var player = Player(CELL_SIZE + CELL_SIZE / 2f, CELL_SIZE + CELL_SIZE / 2f, 0f.toRadian())
@@ -125,15 +124,6 @@ fun RayCaster() {
         // game loop
         while (true) {
             val renderTime = measureTime {
-                if (timer < 5) {
-                    wallTexture[6] = 2
-                } else {
-                    wallTexture[6] = 0
-                }
-
-                if (timer > 10) timer = 0 else timer++
-
-
                 if (pressedKeys.isNotEmpty()) {
                     pistolOffset = IntOffset((20 * sin(player.x)).toInt(), (20 - 10 * sin(player.y)).toInt())
                 }
@@ -169,7 +159,6 @@ private fun drawPlayer(bitmap: BufferedImage, player: Player, xOffset: Int, yOff
         PLAYER_SIZE.toInt(),
         Color.Yellow
     )
-
     drawLine(
         bitmap,
         xOffset + player.x.toInt(),
@@ -237,29 +226,30 @@ private fun drawLine(bitmap: BufferedImage, x1: Int, y1: Int, x2: Int, y2: Int, 
 }
 
 
-// Ray casting using DDA algorithm. Draw vertical and horizontal walls in different colors. Add fish-eye correction.
+// Ray casting using DDA algorithm. Cover walls with walltexture. Add fish-eye correction.
 private fun castRays(player: Player, bitmap: BufferedImage) {
     val rayCount = W
     val rayStep = FOV_RAD / rayCount
 
-    for (i in 0 until rayCount) {
-        val rayAngle = player.rotationRad - FOV_RAD / 2 + i * rayStep
+    for (x in 0 until rayCount) {
+        val rayAngle = player.rotationRad - FOV_RAD / 2 + x * rayStep
 
-        val sinAngle = sin(rayAngle)
-        val cosAngle = cos(rayAngle)
+        val rayDirX = cos(rayAngle)
+        val rayDirY = sin(rayAngle)
 
-        var mapX = player.x.toInt() / CELL_SIZE.toInt()
-        var mapY = player.y.toInt() / CELL_SIZE.toInt()
+        var mapX = floor(player.x / CELL_SIZE).toInt()
+        var mapY = floor(player.y / CELL_SIZE).toInt()
 
-        val deltaDistX = abs(1 / cosAngle)
-        val deltaDistY = abs(1 / sinAngle)
+        val deltaDistX = abs(1 / rayDirX)
+        val deltaDistY = abs(1 / rayDirY)
 
         var sideDistX: Float
         var sideDistY: Float
+
         val stepX: Int
         val stepY: Int
 
-        if (cosAngle < 0) {
+        if (rayDirX < 0) {
             stepX = -1
             sideDistX = (player.x / CELL_SIZE - mapX) * deltaDistX
         } else {
@@ -267,7 +257,7 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
             sideDistX = (mapX + 1.0f - player.x / CELL_SIZE) * deltaDistX
         }
 
-        if (sinAngle < 0) {
+        if (rayDirY < 0) {
             stepY = -1
             sideDistY = (player.y / CELL_SIZE - mapY) * deltaDistY
         } else {
@@ -276,7 +266,7 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
         }
 
         var hit = false
-        var side = 0 // 0 for vertical wall, 1 for horizontal wall
+        var side = 0
 
         while (!hit) {
             if (sideDistX < sideDistY) {
@@ -289,62 +279,61 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
                 side = 1
             }
 
-            if (MAP[mapY * MAP_X + mapX] > 0) hit = true
+            if (mapX < 0 || mapX >= MAP_X || mapY < 0 || mapY >= MAP_Y) {
+                hit = true
+            } else if (MAP[mapY * MAP_X + mapX] > 0) {
+                hit = true
+            }
         }
 
         var perpWallDist: Float
         if (side == 0) {
-            perpWallDist = (mapX - player.x / CELL_SIZE + (1 - stepX) / 2) / cosAngle
+            perpWallDist = (mapX - player.x / CELL_SIZE + (1 - stepX) / 2) / rayDirX
         } else {
-            perpWallDist = (mapY - player.y / CELL_SIZE + (1 - stepY) / 2) / sinAngle
+            perpWallDist = (mapY - player.y / CELL_SIZE + (1 - stepY) / 2) / rayDirY
         }
 
-        // Calculate wall X coordinate (for texture mapping)
+        // Fish-eye correction
+        perpWallDist *= cos(player.rotationRad - rayAngle)
+
+        val lineHeight = (H / perpWallDist).toInt()
+
+        val drawStart = (-lineHeight / 2 + H / 2).coerceAtLeast(0)
+        val drawEnd = (lineHeight / 2 + H / 2).coerceAtMost(H - 1)
+
+        // Texture mapping
         var wallX: Float
         if (side == 0) {
-            wallX = player.y + perpWallDist * sinAngle
+            wallX = player.y / CELL_SIZE + perpWallDist * rayDirY
         } else {
-            wallX = player.x + perpWallDist * cosAngle
+            wallX = player.x / CELL_SIZE + perpWallDist * rayDirX
         }
         wallX -= floor(wallX)
 
-        // Adjust line height calculation
-        val lineHeight = (H / (perpWallDist * cos(rayAngle - player.rotationRad))).toInt()
-        var drawStart = -lineHeight / 2 + H / 2
-        var drawEnd = lineHeight / 2 + H / 2
-
-        // Calculate the actual start and end points for drawing
-        val actualDrawStart = drawStart.coerceAtLeast(0)
-        val actualDrawEnd = drawEnd.coerceAtMost(H - 1)
-
-        // Calculate color intensity based on distance
-        val intensity = if (side == 0) {
-            (1 - (perpWallDist * perpWallDist / (MAP_X))).coerceIn(0f, 1f)
-        } else {
-            (0.8f - (perpWallDist * perpWallDist / (MAP_Y))).coerceIn(0f, 1f)
+        var texX = (wallX * TEXTURE_SIZE).toInt()
+        if ((side == 0 && rayDirX > 0) || (side == 1 && rayDirY < 0)) {
+            texX = TEXTURE_SIZE - texX - 1
         }
 
-        // Draw the wall slice
-        for (y in actualDrawStart until actualDrawEnd) {
-            // Calculate texture Y coordinate
-            val texY = ((y - drawStart).toFloat() / lineHeight * wallTexture.size).toInt().coerceIn(0, wallTexture.size - 1)
+        val step = TEXTURE_SIZE.toFloat() / lineHeight
+        var texPos = (drawStart - H / 2 + lineHeight / 2) * step
 
-            // Use wallX to determine which vertical strip of the texture to use
-            val texX = (wallX * wallTexture.size).toInt()
+        for (y in drawStart until drawEnd) {
+            val texY = (texPos.toInt() and (TEXTURE_SIZE - 1))
+            texPos += step
 
-            // Get color from texture
-            val texValue = wallTexture[texY]
+            val texIndex = (texY * TEXTURE_SIZE + texX) * 3
+            val texColor = Color(
+                wallTexture[texIndex] / 255f,
+                wallTexture[texIndex + 1] / 255f,
+                wallTexture[texIndex + 2] / 255f,
+                1f
+            )
 
-            // Apply color based on texture value
-            val color = when (texValue) {
-                1 -> darkenColor(Color.Gray, intensity)
-                2 -> darkenColor(Color.Red, intensity)
-                else -> Color.Black
-            }
+            val intensity = 1.0f - ((perpWallDist / 20.0f) + 0.3f * side).coerceAtMost(0.8f)
+            val color = darkenColor(texColor, intensity)
 
-            if (i in 0 until W && y in 0 until H) {
-                bitmap.setRGB(i, y, color.toArgb())
-            }
+            bitmap.setRGB(x, y, color.toArgb())
         }
     }
 }
