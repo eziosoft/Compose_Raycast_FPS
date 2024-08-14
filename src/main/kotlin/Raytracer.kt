@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.loadImageBitmap
@@ -87,8 +88,22 @@ fun RayCaster() {
 
         // background: floor and celling
         Column(modifier = Modifier.fillMaxSize()) {
-            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = cellingBrush))
-            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = floorBrush))
+            Image(
+                modifier = Modifier.fillMaxSize().aspectRatio(1f)
+                    .graphicsLayer(
+                        scaleX = 4f,
+                        scaleY = 4f,
+                        rotationX = -45f,
+                        rotationZ = (player.rotationRad * 180 / PI),
+                        translationY = -H.toFloat()
+                    ),
+                bitmap = useResource("sky4.jpg") { loadImageBitmap(it) },
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+
+            )
+//            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = cellingBrush))
+//            Box(modifier = Modifier.fillMaxWidth().weight(1f).background(brush = floorBrush))
         }
 
         // walls
@@ -134,7 +149,7 @@ fun RayCaster() {
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
 
-            println("render time: $renderTime")
+//            println("render time: $renderTime")
         }
     }
 }
@@ -301,7 +316,7 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
         val drawStart = (-lineHeight / 2 + H / 2).coerceAtLeast(0)
         val drawEnd = (lineHeight / 2 + H / 2).coerceAtMost(H - 1)
 
-        // Texture mapping
+        // Texture mapping for walls
         var wallX: Float
         if (side == 0) {
             wallX = player.y / CELL_SIZE + perpWallDist * rayDirY
@@ -330,13 +345,38 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
                 1f
             )
 
-            val intensity = 1.0f - ((perpWallDist / 20.0f) + 0.3f * side).coerceAtMost(0.8f)
+            val intensity = 1.0f - ((perpWallDist / 20.0f) + 0.4f * side).coerceAtMost(1f)
             val color = darkenColor(texColor, intensity)
 
             bitmap.setRGB(x, y, color.toArgb())
         }
+
+        // Floor casting
+        if (drawEnd < H) {
+            for (y in drawEnd until H) {
+                val floorDistance = H.toFloat() / (2.0f * y - H)
+
+                val floorX = player.x / CELL_SIZE + floorDistance * rayDirX
+                val floorY = player.y / CELL_SIZE + floorDistance * rayDirY
+
+                val floorTexX = (floorX * TEXTURE_SIZE % TEXTURE_SIZE).toInt()
+                val floorTexY = (floorY * TEXTURE_SIZE % TEXTURE_SIZE).toInt()
+
+                val texIndex = (floorTexY * TEXTURE_SIZE + floorTexX) * 3
+                val texColor = Color(
+                    floorTexture[texIndex] / 255f,
+                    floorTexture[texIndex + 1] / 255f,
+                    floorTexture[texIndex + 2] / 255f,
+                    1f
+                )
+
+                val color = darkenColor(texColor, 0.5f) // Apply some darkness to the floor
+                bitmap.setRGB(x, y, color.toArgb())
+            }
+        }
     }
 }
+
 
 // Helper function to darken a color based on intensity
 private fun darkenColor(color: Color, intensity: Float): Color {
