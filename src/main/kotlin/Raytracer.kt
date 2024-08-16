@@ -39,11 +39,14 @@ private const val MOVE_STEP = 0.2f
 
 private val MAP = generateMap()
 
-private const val TEXTURE_SIZE = 32
+const val TEXTURE_SIZE = 32
 
 // load textures
-private val wallTexture = readPpmImage( "wall.ppm")
-private val floorTexture = readPpmImage( "floor.ppm")
+private val wallTexture = readPpmImage("wall.ppm")
+private val floorTexture = readPpmImage("floor.ppm")
+private val enemyTexture = readPpmImage("enemy.ppm")
+
+private val enemy00= selectFrame(enemyTexture, 0, 0, TEXTURE_SIZE, 8 * TEXTURE_SIZE)
 
 
 fun generateMap(): Array<Int> {
@@ -165,7 +168,7 @@ private fun updateFrame(player: Player): ImageBitmap {
 
     castRays(player, bitmap)
     drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player, enemy)
-    drawPoint(bitmap, player, enemy)
+    drawSprite(bitmap, player, enemy)
 
     return bitmap.toComposeImageBitmap()
 }
@@ -213,8 +216,7 @@ private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: P
 val enemy = Player(3f * CELL_SIZE, 3f * CELL_SIZE, 100f, 0f)
 
 // draws square in 3d world using 3d projection mapping
-private fun drawPoint(bitmap: BufferedImage, player: Player, enemy: Player) {
-    val pointSize = 0.5f // Size of the square in world units
+private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
     val pointHeight = CELL_SIZE // Height of the square in world units
 
     // Calculate vector from player to enemy
@@ -250,14 +252,18 @@ private fun drawPoint(bitmap: BufferedImage, player: Player, enemy: Player) {
             for (x in (screenX - perceivedWidth / 2)..(screenX + perceivedWidth / 2)) {
                 if (x >= 0 && x < W) {
                     // Calculate texture coordinates
-                    val texX = ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * TEXTURE_SIZE).toInt() % TEXTURE_SIZE
+                    val texX =
+                        ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * TEXTURE_SIZE).toInt() % TEXTURE_SIZE
                     val texY = ((y - topY).toFloat() / perceivedHeight * TEXTURE_SIZE).toInt() % TEXTURE_SIZE
 
                     val texIndex = (texY * TEXTURE_SIZE + texX) * 3
+
+                    val texture = enemy00
+
                     val texColor = Color(
-                         1f,
-                        wallTexture[texIndex + 1] / 255f,
-                        wallTexture[texIndex + 2] / 255f,
+                        texture[texIndex] / 255f,
+                        texture[texIndex + 1] / 255f,
+                        texture[texIndex + 2] / 255f,
                         1f
                     )
 
@@ -265,7 +271,9 @@ private fun drawPoint(bitmap: BufferedImage, player: Player, enemy: Player) {
                     val intensity = (1.0f - (distance / 20.0f)).coerceIn(0.2f, 1f)
                     val shadedColor = darkenColor(texColor, intensity)
 
-                    bitmap.setRGB(x, y, shadedColor.toArgb())
+                    if (texColor.red != 152 / 255f && texColor.green != 0f && texColor.blue != 136 / 255f) {
+                        bitmap.setRGB(x, y, shadedColor.toArgb())
+                    }
                 }
             }
         }

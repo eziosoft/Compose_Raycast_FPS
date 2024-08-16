@@ -32,3 +32,21 @@ fun readPpmImage(path: String): IntArray {
         array
     }
 }
+
+fun selectFrame(array: IntArray, xIndex: Int, yIndex: Int, frameSize: Int, sheetWidth: Int): IntArray {
+    val subArray = IntArray(frameSize * frameSize * 3)
+
+    for (y in 0 until frameSize) {
+        for (x in 0 until frameSize) {
+            val index = ((yIndex * frameSize + y) * sheetWidth + xIndex * frameSize + x) * 3
+            val subIndex = (y * frameSize + x) * 3
+
+            subArray[subIndex] = array[index]
+            subArray[subIndex + 1] = array[index + 1]
+            subArray[subIndex + 2] = array[index + 2]
+        }
+    }
+
+    return subArray
+}
+
