@@ -1,10 +1,8 @@
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.loadImageBitmap
@@ -12,17 +10,11 @@ import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
-import org.jetbrains.skia.ImageFilter
 import java.awt.image.BufferedImage
 import java.lang.Math.random
-import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.floor
-import kotlin.math.sin
+import kotlin.math.*
 import kotlin.time.DurationUnit
 import kotlin.time.measureTime
-import org.jetbrains.skia.RuntimeEffect
-import org.jetbrains.skia.RuntimeShaderBuilder
 
 
 val pressedKeys = mutableSetOf<Long>()
@@ -47,6 +39,13 @@ private const val MOVE_STEP = 0.2f
 
 private val MAP = generateMap()
 
+private const val TEXTURE_SIZE = 32
+
+// load textures
+private val wallTexture = readPpmImage( "wall.ppm")
+private val floorTexture = readPpmImage( "floor.ppm")
+
+
 fun generateMap(): Array<Int> {
     val map = Array(MAP_X * MAP_Y) { 0 }
     for (y in 0 until MAP_Y) {
@@ -66,8 +65,13 @@ fun generateMap(): Array<Int> {
 }
 
 
-
-private var player = Player(CELL_SIZE + CELL_SIZE / 2f, CELL_SIZE + CELL_SIZE / 2f, 0f.toRadian())
+private var player =
+    Player(
+        x = CELL_SIZE + CELL_SIZE / 2f,
+        y = CELL_SIZE + CELL_SIZE / 2f,
+        z = 0f,
+        rotationRad = 0f.toRadian()
+    )
 
 private val floorBrush = Brush.verticalGradient(
     0f to Color(0xFF000000),
@@ -98,13 +102,13 @@ fun RayCaster() {
                         scaleY = 20f,
                         rotationX = -25f,
                         rotationZ = (player.rotationRad * 180 / PI),
-                        translationY = -H*2.toFloat()
+                        translationY = -H * 2.toFloat()
                     ),
                 bitmap = useResource("sky4.jpg") { loadImageBitmap(it) },
                 contentDescription = null,
                 contentScale = ContentScale.FillBounds,
 
-            )
+                )
         }
 
         // walls
@@ -160,20 +164,21 @@ private fun updateFrame(player: Player): ImageBitmap {
     val bitmap = BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB)
 
     castRays(player, bitmap)
-    drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player)
+    drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player, enemy)
+    drawPoint(bitmap, player, enemy)
 
     return bitmap.toComposeImageBitmap()
 }
 
 
-private fun drawPlayer(bitmap: BufferedImage, player: Player, xOffset: Int, yOffset: Int) {
+private fun drawPlayer(bitmap: BufferedImage, player: Player, xOffset: Int, yOffset: Int, color: Color = Color.Yellow) {
     drawFilledRect(
         bitmap,
         xOffset + (player.x - PLAYER_SIZE / 2).toInt(),
         yOffset + (player.y - PLAYER_SIZE / 2).toInt(),
         PLAYER_SIZE.toInt(),
         PLAYER_SIZE.toInt(),
-        Color.Yellow
+        color
     )
     drawLine(
         bitmap,
@@ -181,11 +186,11 @@ private fun drawPlayer(bitmap: BufferedImage, player: Player, xOffset: Int, yOff
         yOffset + player.y.toInt(),
         (xOffset + player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2).toInt(),
         (yOffset + player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2).toInt(),
-        Color.Yellow
+        color
     )
 }
 
-private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: Player) {
+private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: Player, enemy: Player) {
 
     for (y: Int in 0 until MAP_Y) {
         for (x in 0 until MAP_X) {
@@ -201,46 +206,71 @@ private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: P
     }
 
     drawPlayer(bitmap, player, xOffset = xOffset, yOffset = yOffset)
+    drawPlayer(bitmap, enemy, xOffset = xOffset, yOffset = yOffset, color = Color.Red)
 
 }
 
-private fun drawFilledRect(bitmap: BufferedImage, x: Int, y: Int, w: Int, h: Int, color: Color) {
-    for (i in x until x + w) {
-        for (j in y until y + h) {
-            bitmap.setRGB(i, j, color.toArgb())
+val enemy = Player(3f * CELL_SIZE, 3f * CELL_SIZE, 100f, 0f)
+
+// draws square in 3d world using 3d projection mapping
+private fun drawPoint(bitmap: BufferedImage, player: Player, enemy: Player) {
+    val pointSize = 0.5f // Size of the square in world units
+    val pointHeight = CELL_SIZE // Height of the square in world units
+
+    // Calculate vector from player to enemy
+    val dx = enemy.x - player.x
+    val dy = enemy.y - player.y
+
+    // Calculate distance to enemy
+    val distance = sqrt(dx * dx + dy * dy)
+
+    // Calculate angle to enemy relative to player's rotation
+    var angle = atan2(dy, dx) - player.rotationRad
+
+    // Normalize angle to be between -PI and PI
+    angle = (angle + PI) % (2 * PI) - PI
+
+    // Check if enemy is within player's FOV
+    if (abs(angle) < FOV_RAD / 2) {
+        // Calculate screen x-coordinate
+        val screenX = ((W / 2) * (1 + angle / (FOV_RAD / 2))).toInt()
+
+        // Calculate perceived height of the square
+        val perceivedHeight = (H / distance * pointHeight).toInt()
+
+        // Calculate top and bottom y-coordinates
+        val topY = (H / 2 - perceivedHeight / 2).coerceIn(0, H - 1)
+        val bottomY = (H / 2 + perceivedHeight / 2).coerceIn(0, H - 1)
+
+        // Calculate perceived width of the square
+        val perceivedWidth = (perceivedHeight * pointSize).toInt()
+
+        // Draw the textured square
+        for (y in topY..bottomY) {
+            for (x in (screenX - perceivedWidth / 2)..(screenX + perceivedWidth / 2)) {
+                if (x >= 0 && x < W) {
+                    // Calculate texture coordinates
+                    val texX = ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * TEXTURE_SIZE).toInt() % TEXTURE_SIZE
+                    val texY = ((y - topY).toFloat() / perceivedHeight * TEXTURE_SIZE).toInt() % TEXTURE_SIZE
+
+                    val texIndex = (texY * TEXTURE_SIZE + texX) * 3
+                    val texColor = Color(
+                         1f,
+                        wallTexture[texIndex + 1] / 255f,
+                        wallTexture[texIndex + 2] / 255f,
+                        1f
+                    )
+
+                    // Apply distance-based shading
+                    val intensity = (1.0f - (distance / 20.0f)).coerceIn(0.2f, 1f)
+                    val shadedColor = darkenColor(texColor, intensity)
+
+                    bitmap.setRGB(x, y, shadedColor.toArgb())
+                }
+            }
         }
     }
 }
-
-private fun drawLine(bitmap: BufferedImage, x1: Int, y1: Int, x2: Int, y2: Int, color: Color) {
-    val dx = abs(x2 - x1)
-    val dy = abs(y2 - y1)
-
-    val sx = if (x1 < x2) 1 else -1
-    val sy = if (y1 < y2) 1 else -1
-
-    var err = dx - dy
-
-    var x = x1
-    var y = y1
-
-    while (true) {
-        bitmap.setRGB(x, y, color.toArgb())
-
-        if (x == x2 && y == y2) break
-
-        val e2 = 2 * err
-        if (e2 > -dy) {
-            err -= dy
-            x += sx
-        }
-        if (e2 < dx) {
-            err += dx
-            y += sy
-        }
-    }
-}
-
 
 // Ray casting using DDA algorithm. Cover walls with walltexture. Add fish-eye correction.
 private fun castRays(player: Player, bitmap: BufferedImage) {
@@ -442,12 +472,53 @@ fun movePlayer(pressedKeys: Set<Long>) {
 data class Player(
     val x: Float,
     val y: Float,
+    val z: Float,
     val rotationRad: Float
 )
 
 fun Float.toRadian(): Float = this * PI / 180f
 fun Int.toRadian(): Float = this.toFloat() * PI / 180f
 
+private fun drawFilledRect(bitmap: BufferedImage, x: Int, y: Int, w: Int, h: Int, color: Color) {
+    for (i in x until x + w) {
+        for (j in y until y + h) {
+            if (i < 0 || i >= bitmap.width || j < 0 || j >= bitmap.height) {
+                continue
+            }
+
+            bitmap.setRGB(i, j, color.toArgb())
+        }
+    }
+}
+
+private fun drawLine(bitmap: BufferedImage, x1: Int, y1: Int, x2: Int, y2: Int, color: Color) {
+    val dx = abs(x2 - x1)
+    val dy = abs(y2 - y1)
+
+    val sx = if (x1 < x2) 1 else -1
+    val sy = if (y1 < y2) 1 else -1
+
+    var err = dx - dy
+
+    var x = x1
+    var y = y1
+
+    while (true) {
+        bitmap.setRGB(x, y, color.toArgb())
+
+        if (x == x2 && y == y2) break
+
+        val e2 = 2 * err
+        if (e2 > -dy) {
+            err -= dy
+            x += sx
+        }
+        if (e2 < dx) {
+            err += dx
+            y += sy
+        }
+    }
+}
 
 
 
