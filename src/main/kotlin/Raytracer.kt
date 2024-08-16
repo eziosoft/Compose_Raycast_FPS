@@ -44,9 +44,18 @@ const val TEXTURE_SIZE = 32
 // load textures
 private val wallTexture = readPpmImage("wall.ppm")
 private val floorTexture = readPpmImage("floor.ppm")
-private val enemyTexture = readPpmImage("enemy.ppm")
 
-private val enemy00= selectFrame(enemyTexture, 0, 0, TEXTURE_SIZE, 8 * TEXTURE_SIZE)
+
+const val SPRITE_SIZE = 96
+
+private val enemyTexture = readPpmImage("enemy.txt")
+private val textureSet = mapOf(
+    0 to selectFrame(enemyTexture, 0, 0, SPRITE_SIZE, 8 * SPRITE_SIZE),
+    1 to selectFrame(enemyTexture, 1, 0, SPRITE_SIZE, 8 * SPRITE_SIZE)
+)
+
+private var currentTexture = 0
+
 
 
 fun generateMap(): Array<Int> {
@@ -73,20 +82,9 @@ private var player =
         x = CELL_SIZE + CELL_SIZE / 2f,
         y = CELL_SIZE + CELL_SIZE / 2f,
         z = 0f,
-        rotationRad = 0f.toRadian()
+        rotationRad = 45f.toRadian()
     )
 
-private val floorBrush = Brush.verticalGradient(
-    0f to Color(0xFF000000),
-    0.4f to Color(0xFF111111),
-    1f to Color(0xFF777755)
-)
-
-private val cellingBrush = Brush.verticalGradient(
-    0f to Color(0xFF335555),
-    0.4f to Color(0xFF111111),
-    1f to Color(0xFF000000)
-)
 
 @Composable
 fun RayCaster() {
@@ -147,6 +145,13 @@ fun RayCaster() {
         // game loop
         while (true) {
             val renderTime = measureTime {
+
+                if(timer % 10 == 0) {
+                    currentTexture = (currentTexture + 1) % 2
+                }
+                timer++
+
+
                 if (pressedKeys.isNotEmpty()) {
                     pistolOffset = IntOffset((20 * sin(player.x)).toInt(), (20 - 10 * sin(player.y)).toInt())
                 }
@@ -253,12 +258,12 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
                 if (x >= 0 && x < W) {
                     // Calculate texture coordinates
                     val texX =
-                        ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * TEXTURE_SIZE).toInt() % TEXTURE_SIZE
-                    val texY = ((y - topY).toFloat() / perceivedHeight * TEXTURE_SIZE).toInt() % TEXTURE_SIZE
+                        ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * SPRITE_SIZE).toInt() % SPRITE_SIZE
+                    val texY = ((y - topY).toFloat() / perceivedHeight * SPRITE_SIZE).toInt() % SPRITE_SIZE
 
-                    val texIndex = (texY * TEXTURE_SIZE + texX) * 3
+                    val texIndex = (texY * SPRITE_SIZE + texX) * 3
 
-                    val texture = enemy00
+                    val texture = textureSet[currentTexture] ?: error("Texture not found")
 
                     val texColor = Color(
                         texture[texIndex] / 255f,
