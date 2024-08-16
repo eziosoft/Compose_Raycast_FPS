@@ -243,7 +243,7 @@ private fun drawPoint(bitmap: BufferedImage, player: Player, enemy: Player) {
         val bottomY = (H / 2 + perceivedHeight / 2).coerceIn(0, H - 1)
 
         // Calculate perceived width of the square
-        val perceivedWidth = (perceivedHeight * pointSize).toInt()
+        val perceivedWidth = perceivedHeight //(perceivedHeight * pointSize).toInt()
 
         // Draw the textured square
         for (y in topY..bottomY) {
