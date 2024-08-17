@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import models.Player
 import models.animate
+import models.distanceTo
 import models.walkRandom
 import java.awt.image.BufferedImage
 import kotlin.math.*
@@ -56,20 +57,23 @@ private val player =
         rotationRad = 45f.toRadian()
     )
 
-private val enemies = mutableListOf<Player>(
-    Player(
-        x = CELL_SIZE * 10 + CELL_SIZE / 2f,
-        y = CELL_SIZE * 10 + CELL_SIZE / 2f,
-        z = 0f,
-        rotationRad = 45f.toRadian()
-    ),
-    Player(
-        x = CELL_SIZE * 11 + CELL_SIZE / 2f,
-        y = CELL_SIZE * 11 + CELL_SIZE / 2f,
-        z = 0f,
-        rotationRad = 45f.toRadian()
-    ),
-)
+private val enemies = generateRandomEnemies()
+
+fun generateRandomEnemies(): List<Player> {
+    val enemies = mutableListOf<Player>()
+    for (i in 0 until 100) {
+        enemies.add(
+            Player(
+                x = CELL_SIZE * (1 + (Math.random() * (MAP_X - 2)).toInt()) + CELL_SIZE / 2f,
+                y = CELL_SIZE * (1 + (Math.random() * (MAP_Y - 2)).toInt()) + CELL_SIZE / 2f,
+                z = 0f,
+                rotationRad = 0.toRadian()
+            )
+        )
+    }
+    return enemies
+
+}
 
 
 @Composable
@@ -132,7 +136,7 @@ fun RayCaster() {
                 }
 
                 movePlayer(pressedKeys)
-                frame = generateFrame(player)
+                frame = generateFrame()
 
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
@@ -143,21 +147,27 @@ fun RayCaster() {
 }
 
 
-private fun generateFrame(player: Player): ImageBitmap {
+private fun generateFrame(): ImageBitmap {
     val bitmap = BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB)
 
     castRays(player, bitmap)
     drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player)
 
-  enemies.forEach { enemy ->
-      drawSprite(bitmap, player, enemy, wallDepths)
-  }
+    enemies.sortedByDescending { it.distanceTo(player) }.forEach { enemy ->
+        drawSprite(bitmap, player, enemy, wallDepths)
+    }
 
     return bitmap.toComposeImageBitmap()
 }
 
 
-private fun drawPlayerOnMap(bitmap: BufferedImage, player: Player, xOffset: Int, yOffset: Int, color: Color = Color.Yellow) {
+private fun drawPlayerOnMap(
+    bitmap: BufferedImage,
+    player: Player,
+    xOffset: Int,
+    yOffset: Int,
+    color: Color = Color.Yellow
+) {
     drawFilledRect(
         bitmap,
         xOffset + (player.x - PLAYER_SIZE / 2).toInt(),
@@ -196,8 +206,6 @@ private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: P
         drawPlayerOnMap(bitmap, enemy, xOffset = xOffset, yOffset = yOffset, color = Color.Red)
     }
 }
-
-
 
 
 // draws square in 3d world using 3d projection mapping
@@ -274,7 +282,7 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wal
 
                         if (texColor != TRANSPARENT_COLOR) {
                             // Apply distance-based shading
-                            val intensity = (1.0f - (distance / 20.0f)).coerceIn(0.2f, 1f)
+                            val intensity = (1.0f - (distance / 30.0f)).coerceIn(0.2f, 1f)
                             val shadedColor = darkenColor(texColor, intensity)
 
                             bitmap.setRGB(x, y, shadedColor.toArgb())
