@@ -22,7 +22,7 @@ import kotlin.time.measureTime
 
 val pressedKeys = mutableSetOf<Long>()
 
-private const val W = 640
+private const val W = 800
 private const val H = 480
 private const val FPS = 30
 
@@ -32,36 +32,38 @@ private val ROTATION_STEP_RAD = 2f.toRadian()
 
 const val TEXTURE_SIZE = 64 //walls, floor and ceiling textures
 
-private const val MAP_X = 20
-private const val MAP_Y = 20
-
-private const val CELL_SIZE = 5
-
-private val MAP = generateMap(MAP_X, MAP_Y)
-
+private const val CELL_SIZE = 2
 private const val PLAYER_SIZE = 5f // square on the map
 
 // load textures
-private val wallTexture = readPpmImage("wall.ppm")
-private val floorTexture = readPpmImage("floor.ppm")
+
+val floorTexture = readPpmImage("floor.ppm")
 
 
 private val wallDepths = FloatArray(W) // depth buffer
 
-
+private val playerPosition =
+    findPositionBasedOnMapIndex(map = MAP, mapX = MAP_X, mapY = MAP_Y, cellSize = CELL_SIZE, index = MAP.indexOf(-1))
 private val player =
     Player(
-        x = CELL_SIZE + CELL_SIZE / 2f,
-        y = CELL_SIZE + CELL_SIZE / 2f,
+        x = playerPosition.first,
+        y = playerPosition.second,
         z = 0f,
-        rotationRad = 45f.toRadian()
+        rotationRad = -90f.toRadian().normalizeAngle()
     )
 
-private val enemies = generateRandomEnemies()
+private val enemies = getEnemies()
+
+
+fun findPositionBasedOnMapIndex(map: IntArray, mapX: Int, mapY: Int, cellSize: Int, index: Int): Pair<Float, Float> {
+    val x = (index % mapX) * cellSize + cellSize / 2f
+    val y = (index / mapX) * cellSize + cellSize / 2f
+    return Pair(x, y)
+}
 
 fun generateRandomEnemies(): List<Player> {
     val enemies = mutableListOf<Player>()
-    for (i in 0 until 100) {
+    for (i in 0 until 10) {
         enemies.add(
             Player(
                 x = CELL_SIZE * (1 + (Math.random() * (MAP_X - 2)).toInt()) + CELL_SIZE / 2f,
@@ -72,7 +74,17 @@ fun generateRandomEnemies(): List<Player> {
         )
     }
     return enemies
+}
 
+fun getEnemies(): List<Player> {
+    val enemies = mutableListOf<Player>()
+    MAP.forEachIndexed { index, value ->
+        if (value == -2) {
+            val position = findPositionBasedOnMapIndex(MAP, MAP_X, MAP_Y, CELL_SIZE, index)
+             enemies.add(Player(x = position.first, y = position.second, z = 0f, rotationRad = 0f))
+        }
+    }
+    return enemies
 }
 
 
@@ -141,7 +153,7 @@ fun RayCaster() {
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
 
-            println("render time: $renderTime")
+//            println("render time: $renderTime")
         }
     }
 }
@@ -337,6 +349,8 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
         var hit = false
         var side = 0
 
+        var wallTextureIndex: Int = 0
+
         while (!hit) {
             if (sideDistX < sideDistY) {
                 sideDistX += deltaDistX
@@ -348,10 +362,13 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
                 side = 1
             }
 
-            if (mapX < 0 || mapX >= MAP_X || mapY < 0 || mapY >= MAP_Y) {
+
+//            if (mapX < 0 || mapX >= MAP_X || mapY < 0 || mapY >= MAP_Y) {
+//                hit = true
+//            } else
+            if (MAP[mapY * MAP_X + mapX] > 0) {
                 hit = true
-            } else if (MAP[mapY * MAP_X + mapX] > 0) {
-                hit = true
+                wallTextureIndex = MAP[mapY * MAP_X + mapX]
             }
         }
 
@@ -389,6 +406,9 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
         val step = TEXTURE_SIZE.toFloat() / lineHeight
         var texPos = (drawStart - H / 2 + lineHeight / 2) * step
 
+
+        val wallTexture = wallTextures[wallTextureIndex] ?: error("Wall texture not found $wallTextureIndex")
+
         for (y in drawStart until drawEnd) {
             val texY = (texPos.toInt() and (TEXTURE_SIZE - 1))
             texPos += step
@@ -419,15 +439,17 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
                 val floorTexY = (floorY * TEXTURE_SIZE % TEXTURE_SIZE).toInt()
 
                 val texIndex = (floorTexY * TEXTURE_SIZE + floorTexX) * 3
-                val texColor = Color(
-                    floorTexture[texIndex] / 255f,
-                    floorTexture[texIndex + 1] / 255f,
-                    floorTexture[texIndex + 2] / 255f,
-                    1f
-                )
+                if (texIndex > 0) {
+                    val texColor = Color(
+                        floorTexture[texIndex] / 255f,
+                        floorTexture[texIndex + 1] / 255f,
+                        floorTexture[texIndex + 2] / 255f,
+                        1f
+                    )
 
-                val color = darkenColor(texColor, 0.5f) // Apply some darkness to the floor
-                bitmap.setRGB(x, y, color.toArgb())
+                    val color = darkenColor(texColor, 0.5f) // Apply some darkness to the floor
+                    bitmap.setRGB(x, y, color.toArgb())
+                }
             }
         }
     }

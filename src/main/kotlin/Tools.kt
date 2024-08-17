@@ -134,3 +134,6 @@ fun isWall(x: Float, y: Float, map:IntArray, mapW:Int, mapH:Int, cellSize:Int): 
 
 
 
+
+
+
