@@ -2,8 +2,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerMoveFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.res.useResource
@@ -22,7 +25,7 @@ import kotlin.time.measureTime
 
 val pressedKeys = mutableSetOf<Long>()
 
-private const val W = 800
+private const val W = 640
 private const val H = 480
 private const val FPS = 30
 
@@ -81,20 +84,28 @@ fun getEnemies(): List<Player> {
     MAP.forEachIndexed { index, value ->
         if (value == -2) {
             val position = findPositionBasedOnMapIndex(MAP, MAP_X, MAP_Y, CELL_SIZE, index)
-             enemies.add(Player(x = position.first, y = position.second, z = 0f, rotationRad = 0f))
+            enemies.add(Player(x = position.first, y = position.second, z = 0f, rotationRad = 0f))
         }
     }
     return enemies
 }
 
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun RayCaster() {
     var frame by remember { mutableStateOf(ImageBitmap(W, H)) }
 
     var pistolOffset by remember { mutableStateOf(IntOffset(0, 0)) }
 
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .pointerMoveFilter(
+            onMove = {
+                player.rotationRad = (it.x / 200f).normalizeAngle()
+                false
+            }
+        ), contentAlignment = Alignment.Center) {
 
         // background: floor and celling
         Column(modifier = Modifier.fillMaxSize()) {
