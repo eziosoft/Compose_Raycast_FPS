@@ -2,6 +2,7 @@ package models
 
 import isWall
 import normalizeAngle
+import toRadian
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -42,13 +43,13 @@ fun Player.animate(){
         this.x = newX
 
     }else{
-        rotation = this.rotationRad + 0.05f
+        rotation = this.rotationRad + 90.toRadian()
     }
 
     if (!isWall(this.x, newY, map, mapW, mapH, cellSize)) {
         this.y = newY
     }else{
-        rotation = this.rotationRad + 0.05f
+        rotation = this.rotationRad + 90.toRadian()
     }
 
     // rotate

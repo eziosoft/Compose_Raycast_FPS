@@ -14,7 +14,6 @@ import models.Player
 import models.animate
 import models.walkRandom
 import java.awt.image.BufferedImage
-import java.lang.Math.random
 import kotlin.math.*
 import kotlin.time.DurationUnit
 import kotlin.time.measureTime
@@ -24,7 +23,6 @@ val pressedKeys = mutableSetOf<Long>()
 
 private const val W = 640
 private const val H = 480
-
 private const val FPS = 30
 
 private val FOV_RAD = 60.toRadian()
@@ -57,6 +55,21 @@ private val player =
         z = 0f,
         rotationRad = 45f.toRadian()
     )
+
+private val enemies = mutableListOf<Player>(
+    Player(
+        x = CELL_SIZE * 10 + CELL_SIZE / 2f,
+        y = CELL_SIZE * 10 + CELL_SIZE / 2f,
+        z = 0f,
+        rotationRad = 45f.toRadian()
+    ),
+    Player(
+        x = CELL_SIZE * 11 + CELL_SIZE / 2f,
+        y = CELL_SIZE * 11 + CELL_SIZE / 2f,
+        z = 0f,
+        rotationRad = 45f.toRadian()
+    ),
+)
 
 
 @Composable
@@ -109,18 +122,17 @@ fun RayCaster() {
         while (true) {
             val renderTime = measureTime {
 
-                enemy.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
-                enemy.animate()
-
-
-
+                enemies.forEach { enemy ->
+                    enemy.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
+                    enemy.animate()
+                }
 
                 if (pressedKeys.isNotEmpty()) {
                     pistolOffset = IntOffset((20 * sin(player.x)).toInt(), (20 - 10 * sin(player.y)).toInt())
                 }
 
                 movePlayer(pressedKeys)
-                frame = updateFrame(player)
+                frame = generateFrame(player)
 
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
@@ -131,18 +143,21 @@ fun RayCaster() {
 }
 
 
-private fun updateFrame(player: Player): ImageBitmap {
+private fun generateFrame(player: Player): ImageBitmap {
     val bitmap = BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB)
 
     castRays(player, bitmap)
-    drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player, enemy)
-    drawSprite(bitmap, player, enemy, wallDepths)
+    drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player)
+
+  enemies.forEach { enemy ->
+      drawSprite(bitmap, player, enemy, wallDepths)
+  }
 
     return bitmap.toComposeImageBitmap()
 }
 
 
-private fun drawPlayer(bitmap: BufferedImage, player: Player, xOffset: Int, yOffset: Int, color: Color = Color.Yellow) {
+private fun drawPlayerOnMap(bitmap: BufferedImage, player: Player, xOffset: Int, yOffset: Int, color: Color = Color.Yellow) {
     drawFilledRect(
         bitmap,
         xOffset + (player.x - PLAYER_SIZE / 2).toInt(),
@@ -161,8 +176,7 @@ private fun drawPlayer(bitmap: BufferedImage, player: Player, xOffset: Int, yOff
     )
 }
 
-private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: Player, enemy: Player) {
-
+private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: Player) {
     for (y: Int in 0 until MAP_Y) {
         for (x in 0 until MAP_X) {
             var color = Color.Black
@@ -176,12 +190,14 @@ private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: P
         }
     }
 
-    drawPlayer(bitmap, player, xOffset = xOffset, yOffset = yOffset)
-    drawPlayer(bitmap, enemy, xOffset = xOffset, yOffset = yOffset, color = Color.Red)
+    drawPlayerOnMap(bitmap, player, xOffset = xOffset, yOffset = yOffset)
 
+    enemies.forEach { enemy ->
+        drawPlayerOnMap(bitmap, enemy, xOffset = xOffset, yOffset = yOffset, color = Color.Red)
+    }
 }
 
-var enemy = Player(3f * CELL_SIZE, 3f * CELL_SIZE, 100f, 0f)
+
 
 
 // draws square in 3d world using 3d projection mapping
@@ -419,7 +435,6 @@ private fun darkenColor(color: Color, intensity: Float): Color {
         alpha = 1f
     )
 }
-
 
 
 fun movePlayer(pressedKeys: Set<Long>) {
