@@ -41,6 +41,7 @@ private const val PLAYER_SIZE = 5f // square on the map
 // load textures
 
 val floorTexture = readPpmImage("floor.ppm")
+val cellingTexture = readPpmImage("celling.ppm")
 
 
 private val wallDepths = FloatArray(W) // depth buffer
@@ -436,6 +437,33 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
             val color = darkenColor(texColor, intensity)
 
             bitmap.setRGB(x, y, color.toArgb())
+        }
+
+        // Ceiling casting
+        if (drawStart > 0) {
+            for (y in 0 until drawStart) {
+                val ceilingDistance = H.toFloat() / (H - 2.0f * y)
+
+                // Reversed direction for the ceiling
+                val ceilingX = player.x / CELL_SIZE + ceilingDistance * rayDirX
+                val ceilingY = player.y / CELL_SIZE + ceilingDistance * rayDirY
+
+                val ceilingTexX = ((ceilingX - floor(ceilingX)) * TEXTURE_SIZE).toInt()
+                val ceilingTexY = ((ceilingY - floor(ceilingY)) * TEXTURE_SIZE).toInt()
+
+                val texIndex = (ceilingTexY * TEXTURE_SIZE + ceilingTexX) * 3
+                if (texIndex >= 0) {
+                    val texColor = Color(
+                        cellingTexture[texIndex] / 255f,
+                        cellingTexture[texIndex + 1] / 255f,
+                        cellingTexture[texIndex + 2] / 255f,
+                        1f
+                    )
+
+                    val color = darkenColor(texColor, 0.5f) // Apply some darkness to the ceiling
+                    bitmap.setRGB(x, y, color.toArgb())
+                }
+            }
         }
 
         // Floor casting
