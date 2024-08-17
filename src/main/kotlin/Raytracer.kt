@@ -374,9 +374,9 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
             }
 
 
-//            if (mapX < 0 || mapX >= MAP_X || mapY < 0 || mapY >= MAP_Y) {
-//                hit = true
-//            } else
+            if (mapX < 0 || mapX >= MAP_X || mapY < 0 || mapY >= MAP_Y) {
+                hit = true
+            } else
             if (MAP[mapY * MAP_X + mapX] > 0) {
                 hit = true
                 wallTextureIndex = MAP[mapY * MAP_X + mapX]
@@ -450,7 +450,7 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
                 val floorTexY = (floorY * TEXTURE_SIZE % TEXTURE_SIZE).toInt()
 
                 val texIndex = (floorTexY * TEXTURE_SIZE + floorTexX) * 3
-                if (texIndex > 0) {
+                if (texIndex >= 0) {
                     val texColor = Color(
                         floorTexture[texIndex] / 255f,
                         floorTexture[texIndex + 1] / 255f,
