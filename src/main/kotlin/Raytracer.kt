@@ -39,7 +39,7 @@ private const val MOVE_STEP = 0.2f
 
 private val MAP = generateMap()
 
-const val TEXTURE_SIZE = 32
+const val TEXTURE_SIZE = 64
 
 // load textures
 private val wallTexture = readPpmImage("wall.ppm")
@@ -47,6 +47,9 @@ private val floorTexture = readPpmImage("floor.ppm")
 
 
 private var walkingFrame = 0
+
+val wallDepths = FloatArray(W)
+
 
 
 fun generateMap(): Array<Int> {
@@ -137,7 +140,7 @@ fun RayCaster() {
         while (true) {
             val renderTime = measureTime {
 
-                if (timer % 10 == 0) {
+                if (timer % 7 == 0) {
                     walkingFrame = (walkingFrame + 1) % 4
                 }
                 timer++
@@ -155,7 +158,7 @@ fun RayCaster() {
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
 
-//            println("render time: $renderTime")
+            println("render time: $renderTime")
         }
     }
 }
@@ -166,7 +169,7 @@ private fun updateFrame(player: Player): ImageBitmap {
 
     castRays(player, bitmap)
     drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player, enemy)
-    drawSprite(bitmap, player, enemy)
+    drawSprite(bitmap, player, enemy, wallDepths)
 
     return bitmap.toComposeImageBitmap()
 }
@@ -241,7 +244,7 @@ private fun animateEnemy() {
 }
 
 // draws square in 3d world using 3d projection mapping
-private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
+private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wallDepths: FloatArray) {
     // Calculate the angle from the enemy to the player
     val angleToPlayer = atan2(player.y - enemy.y, player.x - enemy.x)
 
@@ -257,7 +260,6 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
 
     // Fetch the correct texture for rendering
     val texture = getGuardTexture(direction = textureIndex.toInt(), walking = true, walkingFrame = walkingFrame)
-
 
     val pointHeight = CELL_SIZE // Height of the square in world units
 
@@ -287,38 +289,45 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
         val bottomY = (H / 2 + perceivedHeight / 2).coerceIn(0, H - 1)
 
         // Calculate perceived width of the square
-        val perceivedWidth = perceivedHeight //(perceivedHeight * pointSize).toInt()
+        val perceivedWidth = perceivedHeight
 
         // Draw the textured square
         for (y in topY..bottomY) {
             for (x in (screenX - perceivedWidth / 2)..(screenX + perceivedWidth / 2)) {
                 if (x >= 0 && x < W) {
-                    // Calculate texture coordinates
-                    val texX =
-                        ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * SPRITE_SIZE).toInt() % SPRITE_SIZE
-                    val texY = ((y - topY).toFloat() / perceivedHeight * SPRITE_SIZE).toInt() % SPRITE_SIZE
+                    // Only draw the sprite pixel if it's closer than the wall
+//                    println("$distance ${wallDepths[x]}")
 
-                    val texIndex = (texY * SPRITE_SIZE + texX) * 3
+                    if (wallDepths[x]- (distance/CELL_SIZE)>-0.1  ) {
+                        // Calculate texture coordinates
+                        val texX = ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * SPRITE_SIZE).toInt() % SPRITE_SIZE
+                        val texY = ((y - topY).toFloat() / perceivedHeight * SPRITE_SIZE).toInt() % SPRITE_SIZE
 
-                    val texColor = Color(
-                        texture[texIndex] / 255f,
-                        texture[texIndex + 1] / 255f,
-                        texture[texIndex + 2] / 255f,
-                        1f
-                    )
+                        val texIndex = (texY * SPRITE_SIZE + texX) * 3
 
-                    // Apply distance-based shading
-                    val intensity = (1.0f - (distance / 20.0f)).coerceIn(0.2f, 1f)
-                    val shadedColor = darkenColor(texColor, intensity)
+                        val texColor = Color(
+                            texture[texIndex] / 255f,
+                            texture[texIndex + 1] / 255f,
+                            texture[texIndex + 2] / 255f,
+                            1f
+                        )
 
-                    if (texColor != TRANSPARENT_COLOR) {
-                        bitmap.setRGB(x, y, shadedColor.toArgb())
+
+
+                        if (texColor != TRANSPARENT_COLOR) {
+                            // Apply distance-based shading
+                            val intensity = (1.0f - (distance / 20.0f)).coerceIn(0.2f, 1f)
+                            val shadedColor = darkenColor(texColor, intensity)
+
+                            bitmap.setRGB(x, y, shadedColor.toArgb())
+                        }
                     }
                 }
             }
         }
     }
 }
+
 
 
 // Ray casting using DDA algorithm. Cover walls with walltexture. Add fish-eye correction.
@@ -387,6 +396,8 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
         } else {
             perpWallDist = (mapY - player.y / CELL_SIZE + (1 - stepY) / 2) / rayDirY
         }
+
+        wallDepths[x] = perpWallDist
 
         // Fish-eye correction
         perpWallDist *= cos(player.rotationRad - rayAngle)
@@ -480,7 +491,7 @@ private fun isWall(x: Float, y: Float): Boolean {
 
 
 fun movePlayer(pressedKeys: Set<Long>) {
-    println("pressedKeys: $pressedKeys")
+//    println("pressedKeys: $pressedKeys")
     var dx = 0f
     var dy = 0f
     var dr = 0f
