@@ -10,6 +10,9 @@ import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import models.Player
+import models.animate
+import models.walkRandom
 import java.awt.image.BufferedImage
 import java.lang.Math.random
 import kotlin.math.*
@@ -24,54 +27,30 @@ private const val H = 480
 
 private const val FPS = 30
 
+private val FOV_RAD = 60.toRadian()
+private const val MOVE_STEP = 0.2f
+private val ROTATION_STEP_RAD = 2f.toRadian()
+
+const val TEXTURE_SIZE = 64 //walls, floor and ceiling textures
+
 private const val MAP_X = 20
 private const val MAP_Y = 20
+
 private const val CELL_SIZE = 5
-private const val PLAYER_SIZE = 5f
 
-private val FOV_RAD = 60.toRadian()
+private val MAP = generateMap(MAP_X, MAP_Y)
 
-
-const val PI = 3.1415927f
-
-private val ROTATION_STEP_RAD = 2f.toRadian()
-private const val MOVE_STEP = 0.2f
-
-private val MAP = generateMap()
-
-const val TEXTURE_SIZE = 64
+private const val PLAYER_SIZE = 5f // square on the map
 
 // load textures
 private val wallTexture = readPpmImage("wall.ppm")
 private val floorTexture = readPpmImage("floor.ppm")
 
 
-private var walkingFrame = 0
-
-val wallDepths = FloatArray(W)
+private val wallDepths = FloatArray(W) // depth buffer
 
 
-
-fun generateMap(): Array<Int> {
-    val map = Array(MAP_X * MAP_Y) { 0 }
-    for (y in 0 until MAP_Y) {
-        for (x in 0 until MAP_X) {
-            if (x == 0 || y == 0 || x == MAP_X - 1 || y == MAP_Y - 1) {
-                map[y * MAP_X + x] = 1
-            } else {
-                map[y * MAP_X + x] = if (random() < 0.2) 1 else 0
-            }
-
-            if (x == 1 && y == 1) {
-                map[y * MAP_X + x] = 0
-            }
-        }
-    }
-    return map
-}
-
-
-private var player =
+private val player =
     Player(
         x = CELL_SIZE + CELL_SIZE / 2f,
         y = CELL_SIZE + CELL_SIZE / 2f,
@@ -121,31 +100,19 @@ fun RayCaster() {
             bitmap = useResource("pistol.webp") { loadImageBitmap(it) },
             contentDescription = null,
         )
-
-//        Dpad(
-//            modifier = Modifier.align(Alignment.BottomEnd),
-//            onUp = { movePlayer(374199025664) },
-//            onDown = { movePlayer(357019156480) },
-//            onLeft = { movePlayer(279709745152) },
-//            onRight = { movePlayer(292594647040) },
-//            onCenter = { }
-//        )
     }
 
 
 
     LaunchedEffect(Unit) {
-        var timer = 0
         // game loop
         while (true) {
             val renderTime = measureTime {
 
-                if (timer % 7 == 0) {
-                    walkingFrame = (walkingFrame + 1) % 4
-                }
-                timer++
+                enemy.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
+                enemy.animate()
 
-                animateEnemy()
+
 
 
                 if (pressedKeys.isNotEmpty()) {
@@ -216,32 +183,6 @@ private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: P
 
 var enemy = Player(3f * CELL_SIZE, 3f * CELL_SIZE, 100f, 0f)
 
-private fun animateEnemy() {
-    // move enemy, avoid walls
-    val dx = 0.1f * cos(enemy.rotationRad)
-    val dy = 0.1f * sin(enemy.rotationRad)
-
-    var rotation = enemy.rotationRad
-
-    val newX = enemy.x + dx
-    val newY = enemy.y + dy
-
-    if (!isWall(newX, enemy.y)) {
-        enemy = enemy.copy(x = newX)
-
-    }else{
-        rotation = enemy.rotationRad + 0.05f
-    }
-
-    if (!isWall(enemy.x, newY)) {
-        enemy = enemy.copy(y = newY)
-    }else{
-        rotation = enemy.rotationRad + 0.05f
-    }
-
-    // rotate enemy
-    enemy = enemy.copy(rotationRad = rotation.normalizeAngle())
-}
 
 // draws square in 3d world using 3d projection mapping
 private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wallDepths: FloatArray) {
@@ -259,7 +200,7 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wal
     val textureIndex = numTextures - ((diff / (2 * PI) * numTextures) + numTextures) % numTextures
 
     // Fetch the correct texture for rendering
-    val texture = getGuardTexture(direction = textureIndex.toInt(), walking = true, walkingFrame = walkingFrame)
+    val texture = getGuardTexture(direction = textureIndex.toInt(), walking = true, walkingFrame = enemy.walkingFrame)
 
     val pointHeight = CELL_SIZE // Height of the square in world units
 
@@ -298,9 +239,10 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wal
                     // Only draw the sprite pixel if it's closer than the wall
 //                    println("$distance ${wallDepths[x]}")
 
-                    if (wallDepths[x]- (distance/CELL_SIZE)>-0.1  ) {
+                    if (wallDepths[x] - (distance / CELL_SIZE) > -0.1) {
                         // Calculate texture coordinates
-                        val texX = ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * SPRITE_SIZE).toInt() % SPRITE_SIZE
+                        val texX =
+                            ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * SPRITE_SIZE).toInt() % SPRITE_SIZE
                         val texY = ((y - topY).toFloat() / perceivedHeight * SPRITE_SIZE).toInt() % SPRITE_SIZE
 
                         val texIndex = (texY * SPRITE_SIZE + texX) * 3
@@ -327,7 +269,6 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wal
         }
     }
 }
-
 
 
 // Ray casting using DDA algorithm. Cover walls with walltexture. Add fish-eye correction.
@@ -479,15 +420,6 @@ private fun darkenColor(color: Color, intensity: Float): Color {
     )
 }
 
-private fun isWall(x: Float, y: Float): Boolean {
-    val mapX = (x / CELL_SIZE).toInt()
-    val mapY = (y / CELL_SIZE).toInt()
-    return if (mapX in 0 until MAP_X && mapY in 0 until MAP_Y) {
-        MAP[mapY * MAP_X + mapX] == 1
-    } else {
-        true // Treat out-of-bounds as walls
-    }
-}
 
 
 fun movePlayer(pressedKeys: Set<Long>) {
@@ -524,74 +456,25 @@ fun movePlayer(pressedKeys: Set<Long>) {
 
     // Apply rotation
     val newRotation = player.rotationRad + dr
-    player = player.copy(rotationRad = newRotation.normalizeAngle())
+    player.rotationRad = newRotation.normalizeAngle()
 
     // Apply movement with collision detection
     val newX = player.x + dx
     val newY = player.y + dy
 
     // Check X movement
-    if (!isWall(newX, player.y)) {
-        player = player.copy(x = newX)
+    if (!isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE)) {
+        player.x = newX
     }
 
     // Check Y movement
-    if (!isWall(player.x, newY)) {
-        player = player.copy(y = newY)
+    if (!isWall(player.x, newY, MAP, MAP_X, MAP_Y, CELL_SIZE)) {
+        player.y = newY
     }
 }
 
-data class Player(
-    val x: Float,
-    val y: Float,
-    val z: Float,
-    val rotationRad: Float
-)
 
 
-fun Float.toRadian(): Float = this * PI / 180f
-fun Int.toRadian(): Float = this.toFloat() * PI / 180f
-
-private fun drawFilledRect(bitmap: BufferedImage, x: Int, y: Int, w: Int, h: Int, color: Color) {
-    for (i in x until x + w) {
-        for (j in y until y + h) {
-            if (i < 0 || i >= bitmap.width || j < 0 || j >= bitmap.height) {
-                continue
-            }
-
-            bitmap.setRGB(i, j, color.toArgb())
-        }
-    }
-}
-
-private fun drawLine(bitmap: BufferedImage, x1: Int, y1: Int, x2: Int, y2: Int, color: Color) {
-    val dx = abs(x2 - x1)
-    val dy = abs(y2 - y1)
-
-    val sx = if (x1 < x2) 1 else -1
-    val sy = if (y1 < y2) 1 else -1
-
-    var err = dx - dy
-
-    var x = x1
-    var y = y1
-
-    while (true) {
-        bitmap.setRGB(x, y, color.toArgb())
-
-        if (x == x2 && y == y2) break
-
-        val e2 = 2 * err
-        if (e2 > -dy) {
-            err -= dy
-            x += sx
-        }
-        if (e2 < dx) {
-            err += dx
-            y += sy
-        }
-    }
-}
 
 
 
