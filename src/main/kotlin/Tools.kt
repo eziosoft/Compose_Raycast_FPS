@@ -42,12 +42,21 @@ private fun readNonCommentLine(reader: BufferedReader): String {
 }
 
 
-fun selectFrame(array: IntArray, xIndex: Int, yIndex: Int, frameSize: Int, sheetWidth: Int): IntArray {
+fun selectFrame(
+    array: IntArray,
+    xIndex: Int,
+    yIndex: Int,
+    frameSize: Int,
+    sheetWidth: Int,
+    dividerWidth: Int
+): IntArray {
     val subArray = IntArray(frameSize * frameSize * 3)
 
     for (y in 0 until frameSize) {
         for (x in 0 until frameSize) {
-            val index = ((yIndex * frameSize + y) * sheetWidth + xIndex * frameSize + x) * 3
+            // Calculate the index in the original array, considering the divider width
+            val index =
+                ((yIndex * (frameSize + dividerWidth) + y) * (sheetWidth + 7 * dividerWidth) + xIndex * (frameSize + dividerWidth) + x) * 3
             val subIndex = (y * frameSize + x) * 3
 
             subArray[subIndex] = array[index]
@@ -58,4 +67,9 @@ fun selectFrame(array: IntArray, xIndex: Int, yIndex: Int, frameSize: Int, sheet
 
     return subArray
 }
+
+
+fun Float.normalizeAngle(): Float = (this + PI) % (2 * PI) - PI
+
+
 

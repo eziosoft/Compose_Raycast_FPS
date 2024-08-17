@@ -32,7 +32,7 @@ private const val PLAYER_SIZE = 5f
 private val FOV_RAD = 60.toRadian()
 
 
-private const val PI = 3.1415927f
+const val PI = 3.1415927f
 
 private val ROTATION_STEP_RAD = 2f.toRadian()
 private const val MOVE_STEP = 0.2f
@@ -46,16 +46,7 @@ private val wallTexture = readPpmImage("wall.ppm")
 private val floorTexture = readPpmImage("floor.ppm")
 
 
-const val SPRITE_SIZE = 96
-
-private val enemyTexture = readPpmImage("enemy.txt")
-private val textureSet = mapOf(
-    0 to selectFrame(enemyTexture, 0, 0, SPRITE_SIZE, 8 * SPRITE_SIZE),
-    1 to selectFrame(enemyTexture, 1, 0, SPRITE_SIZE, 8 * SPRITE_SIZE)
-)
-
-private var currentTexture = 0
-
+private var walkingFrame = 0
 
 
 fun generateMap(): Array<Int> {
@@ -146,10 +137,12 @@ fun RayCaster() {
         while (true) {
             val renderTime = measureTime {
 
-                if(timer % 10 == 0) {
-                    currentTexture = (currentTexture + 1) % 2
+                if (timer % 10 == 0) {
+                    walkingFrame = (walkingFrame + 1) % 4
                 }
                 timer++
+
+                animateEnemy()
 
 
                 if (pressedKeys.isNotEmpty()) {
@@ -218,10 +211,54 @@ private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: P
 
 }
 
-val enemy = Player(3f * CELL_SIZE, 3f * CELL_SIZE, 100f, 0f)
+var enemy = Player(3f * CELL_SIZE, 3f * CELL_SIZE, 100f, 0f)
+
+private fun animateEnemy() {
+    // move enemy, avoid walls
+    val dx = 0.1f * cos(enemy.rotationRad)
+    val dy = 0.1f * sin(enemy.rotationRad)
+
+    var rotation = enemy.rotationRad
+
+    val newX = enemy.x + dx
+    val newY = enemy.y + dy
+
+    if (!isWall(newX, enemy.y)) {
+        enemy = enemy.copy(x = newX)
+
+    }else{
+        rotation = enemy.rotationRad + 0.05f
+    }
+
+    if (!isWall(enemy.x, newY)) {
+        enemy = enemy.copy(y = newY)
+    }else{
+        rotation = enemy.rotationRad + 0.05f
+    }
+
+    // rotate enemy
+    enemy = enemy.copy(rotationRad = rotation.normalizeAngle())
+}
 
 // draws square in 3d world using 3d projection mapping
 private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
+    // Calculate the angle from the enemy to the player
+    val angleToPlayer = atan2(player.y - enemy.y, player.x - enemy.x)
+
+    // Calculate the difference between the enemy's rotation and the angle to the player
+    var diff = angleToPlayer - enemy.rotationRad
+
+    // Normalize the angle difference to be between -PI and PI
+    diff = (diff + PI) % (2 * PI) - PI
+
+    // Calculate the texture index, ensuring it falls within the valid range
+    val numTextures = 8  // Assuming there are 8 textures in the textureSet
+    val textureIndex = numTextures - ((diff / (2 * PI) * numTextures) + numTextures) % numTextures
+
+    // Fetch the correct texture for rendering
+    val texture = getGuardTexture(direction = textureIndex.toInt(), walking = true, walkingFrame = walkingFrame)
+
+
     val pointHeight = CELL_SIZE // Height of the square in world units
 
     // Calculate vector from player to enemy
@@ -263,8 +300,6 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
 
                     val texIndex = (texY * SPRITE_SIZE + texX) * 3
 
-                    val texture = textureSet[currentTexture] ?: error("Texture not found")
-
                     val texColor = Color(
                         texture[texIndex] / 255f,
                         texture[texIndex + 1] / 255f,
@@ -276,7 +311,7 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
                     val intensity = (1.0f - (distance / 20.0f)).coerceIn(0.2f, 1f)
                     val shadedColor = darkenColor(texColor, intensity)
 
-                    if (texColor.red != 152 / 255f && texColor.green != 0f && texColor.blue != 136 / 255f) {
+                    if (texColor != TRANSPARENT_COLOR) {
                         bitmap.setRGB(x, y, shadedColor.toArgb())
                     }
                 }
@@ -284,6 +319,7 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player) {
         }
     }
 }
+
 
 // Ray casting using DDA algorithm. Cover walls with walltexture. Add fish-eye correction.
 private fun castRays(player: Player, bitmap: BufferedImage) {
@@ -444,6 +480,7 @@ private fun isWall(x: Float, y: Float): Boolean {
 
 
 fun movePlayer(pressedKeys: Set<Long>) {
+    println("pressedKeys: $pressedKeys")
     var dx = 0f
     var dy = 0f
     var dr = 0f
@@ -456,6 +493,17 @@ fun movePlayer(pressedKeys: Set<Long>) {
         dx -= MOVE_STEP * cos(player.rotationRad)
         dy -= MOVE_STEP * sin(player.rotationRad)
     }
+
+    if (348429221888 in pressedKeys) { // A key
+        dx -= MOVE_STEP * cos(player.rotationRad + 90.toRadian())
+        dy -= MOVE_STEP * sin(player.rotationRad + 90.toRadian())
+    }
+
+    if (296889614336 in pressedKeys) { // D key
+        dx += MOVE_STEP * cos(player.rotationRad + 90.toRadian())
+        dy += MOVE_STEP * sin(player.rotationRad + 90.toRadian())
+    }
+
     if (279709745152 in pressedKeys) { // Up arrow key
         dr -= ROTATION_STEP_RAD
     }
@@ -465,7 +513,7 @@ fun movePlayer(pressedKeys: Set<Long>) {
 
     // Apply rotation
     val newRotation = player.rotationRad + dr
-    player = player.copy(rotationRad = newRotation)
+    player = player.copy(rotationRad = newRotation.normalizeAngle())
 
     // Apply movement with collision detection
     val newX = player.x + dx
@@ -488,6 +536,7 @@ data class Player(
     val z: Float,
     val rotationRad: Float
 )
+
 
 fun Float.toRadian(): Float = this * PI / 180f
 fun Int.toRadian(): Float = this.toFloat() * PI / 180f
