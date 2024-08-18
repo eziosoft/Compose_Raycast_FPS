@@ -80,46 +80,7 @@ fun Float.normalizeAngle(): Float = (this + PI) % (2 * PI) - PI
 fun Float.toRadian(): Float = this * PI / 180f
 fun Int.toRadian(): Float = this.toFloat() * PI / 180f
 
-fun drawFilledRect(bitmap: BufferedImage, x: Int, y: Int, w: Int, h: Int, color: Color) {
-    for (i in x until x + w) {
-        for (j in y until y + h) {
-            if (i < 0 || i >= bitmap.width || j < 0 || j >= bitmap.height) {
-                continue
-            }
 
-            bitmap.setRGB(i, j, color.toArgb())
-        }
-    }
-}
-
-fun drawLine(bitmap: BufferedImage, x1: Int, y1: Int, x2: Int, y2: Int, color: Color) {
-    val dx = abs(x2 - x1)
-    val dy = abs(y2 - y1)
-
-    val sx = if (x1 < x2) 1 else -1
-    val sy = if (y1 < y2) 1 else -1
-
-    var err = dx - dy
-
-    var x = x1
-    var y = y1
-
-    while (true) {
-        bitmap.setRGB(x, y, color.toArgb())
-
-        if (x == x2 && y == y2) break
-
-        val e2 = 2 * err
-        if (e2 > -dy) {
-            err -= dy
-            x += sx
-        }
-        if (e2 < dx) {
-            err += dx
-            y += sy
-        }
-    }
-}
 
 fun isWall(x: Float, y: Float, map:IntArray, mapW:Int, mapH:Int, cellSize:Int): Boolean {
     val mapX = (x / cellSize).toInt()

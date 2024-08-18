@@ -19,6 +19,7 @@ import models.distanceTo
 import models.walkRandom
 import java.awt.image.BufferedImage
 import kotlin.math.*
+import kotlin.time.Duration
 import kotlin.time.DurationUnit
 import kotlin.time.measureTime
 
@@ -57,6 +58,8 @@ private val player =
     )
 
 private val enemies = getEnemies()
+
+private var renderTime: Duration = Duration.ZERO
 
 
 fun findPositionBasedOnMapIndex(map: IntArray, mapX: Int, mapY: Int, cellSize: Int, index: Int): Pair<Float, Float> {
@@ -148,7 +151,7 @@ fun RayCaster() {
     LaunchedEffect(Unit) {
         // game loop
         while (true) {
-            val renderTime = measureTime {
+            renderTime = measureTime {
 
                 enemies.forEach { enemy ->
                     enemy.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
@@ -175,60 +178,24 @@ private fun generateFrame(): ImageBitmap {
     val bitmap = BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB)
 
     castRays(player, bitmap)
-    drawMap(bitmap, 10, H - CELL_SIZE * MAP_Y - 10, player)
+    drawMap(
+        bitmap = bitmap,
+        xOffset = 10,
+        yOffset = H - CELL_SIZE * MAP_Y - 10,
+        player = player,
+        enemies = enemies,
+        cellSize = CELL_SIZE,
+        playerSize = PLAYER_SIZE
+    )
 
     enemies.sortedByDescending { it.distanceTo(player) }.forEach { enemy ->
         drawSprite(bitmap, player, enemy, wallDepths)
     }
 
+    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
+
+
     return bitmap.toComposeImageBitmap()
-}
-
-
-private fun drawPlayerOnMap(
-    bitmap: BufferedImage,
-    player: Player,
-    xOffset: Int,
-    yOffset: Int,
-    color: Color = Color.Yellow
-) {
-    drawFilledRect(
-        bitmap,
-        xOffset + (player.x - PLAYER_SIZE / 2).toInt(),
-        yOffset + (player.y - PLAYER_SIZE / 2).toInt(),
-        PLAYER_SIZE.toInt(),
-        PLAYER_SIZE.toInt(),
-        color
-    )
-    drawLine(
-        bitmap,
-        xOffset + player.x.toInt(),
-        yOffset + player.y.toInt(),
-        (xOffset + player.x + cos(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2).toInt(),
-        (yOffset + player.y + sin(player.rotationRad.toDouble()).toFloat() * PLAYER_SIZE * 2).toInt(),
-        color
-    )
-}
-
-private fun drawMap(bitmap: BufferedImage, xOffset: Int, yOffset: Int, player: Player) {
-    for (y: Int in 0 until MAP_Y) {
-        for (x in 0 until MAP_X) {
-            var color = Color.Black
-            if (MAP[y * MAP_X + x] > 0) {
-                color = Color.White
-            } else {
-                color = Color.Black
-            }
-
-            drawFilledRect(bitmap, xOffset + x * CELL_SIZE, yOffset + y * CELL_SIZE, CELL_SIZE, CELL_SIZE, color)
-        }
-    }
-
-    drawPlayerOnMap(bitmap, player, xOffset = xOffset, yOffset = yOffset)
-
-    enemies.forEach { enemy ->
-        drawPlayerOnMap(bitmap, enemy, xOffset = xOffset, yOffset = yOffset, color = Color.Red)
-    }
 }
 
 
@@ -325,6 +292,8 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
     val rayStep = FOV_RAD / rayCount
 
     for (x in 0 until rayCount) {
+        val cameraX = 2.0 * x / W - 1.0 // x-coordinate in camera space
+
         val rayAngle = player.rotationRad - FOV_RAD / 2 + x * rayStep
 
         val rayDirX = cos(rayAngle)
@@ -378,10 +347,10 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
             if (mapX < 0 || mapX >= MAP_X || mapY < 0 || mapY >= MAP_Y) {
                 hit = true
             } else
-            if (MAP[mapY * MAP_X + mapX] > 0) {
-                hit = true
-                wallTextureIndex = MAP[mapY * MAP_X + mapX]
-            }
+                if (MAP[mapY * MAP_X + mapX] > 0) {
+                    hit = true
+                    wallTextureIndex = MAP[mapY * MAP_X + mapX]
+                }
         }
 
         var perpWallDist: Float
