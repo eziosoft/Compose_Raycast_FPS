@@ -163,6 +163,10 @@ private fun generateFrame(): Screen {
     val bitmap = Screen(W, H)
 
     castRays(player, bitmap)
+    enemies.sortedByDescending { it.distanceTo(player) }.forEach { enemy ->
+        drawSprite(bitmap, player, enemy, wallDepths)
+    }
+
     drawMap(
         bitmap = bitmap,
         xOffset = 10,
@@ -173,9 +177,6 @@ private fun generateFrame(): Screen {
         playerSize = PLAYER_SIZE
     )
 
-    enemies.sortedByDescending { it.distanceTo(player) }.forEach { enemy ->
-        drawSprite(bitmap, player, enemy, wallDepths)
-    }
 
 //    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
 
@@ -494,15 +495,28 @@ fun movePlayer(pressedKeys: Set<Long>) {
     val newX = player.x + dx
     val newY = player.y + dy
 
-    // Check X movement
-    if (!isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE)) {
+    if (isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.NONE) {
         player.x = newX
     }
 
-    // Check Y movement
-    if (!isWall(player.x, newY, MAP, MAP_X, MAP_Y, CELL_SIZE)) {
+    if (isWall(player.x, newY, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.NONE) {
         player.y = newY
     }
+
+    // Open door
+
+    if (isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.DOOR) {
+        // open door
+        MAP[MAP_X * (player.y.toInt() / CELL_SIZE) + (newX.toInt() / CELL_SIZE)] = 0
+    }
+
+    if (isWall(player.x, newY, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.DOOR) {
+        // open door
+        MAP[MAP_X * (newY.toInt() / CELL_SIZE) + (player.x.toInt() / CELL_SIZE)] = 0
+    }
+
+
+
 }
 
 

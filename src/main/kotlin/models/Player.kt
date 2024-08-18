@@ -4,6 +4,7 @@ import isWall
 import normalizeAngle
 import toRadian
 import kotlin.math.cos
+import kotlin.math.sign
 import kotlin.math.sin
 
 enum class PlayerState {
@@ -33,29 +34,32 @@ fun Player.distanceTo(player: Player): Float {
 }
 
 
-fun Player.walkRandom(map: IntArray, mapW: Int, mapH: Int, cellSize: Int) {
-    // move, avoid walls
+fun Player.walkRandom(map: IntArray, mapW: Int, mapH: Int, cellSize: Int, buffer: Float = 0.2f) {
+    // Calculate movement deltas based on current rotation
     val dx = 0.1f * cos(this.rotationRad)
     val dy = 0.1f * sin(this.rotationRad)
 
-    var rotation = this.rotationRad
-
+    // Calculate new positions with buffer applied
     val newX = this.x + dx
     val newY = this.y + dy
 
-    if (!isWall(newX, this.y, map, mapW, mapH, cellSize)) {
-        this.x = newX
+    // Initialize rotation to current rotation
+    var rotation = this.rotationRad
 
+    // Check for wall collisions and apply buffer zone
+    if (isWall(newX + dx.sign * buffer, this.y, map, mapW, mapH, cellSize) == WallType.NONE) {
+        this.x = newX
     } else {
-        rotation = this.rotationRad + 90.toRadian()
+        rotation = (rotation + 10.toRadian()).normalizeAngle()
     }
 
-    if (!isWall(this.x, newY, map, mapW, mapH, cellSize)) {
+    if (isWall(this.x, newY + dy.sign * buffer, map, mapW, mapH, cellSize) == WallType.NONE) {
         this.y = newY
     } else {
-        rotation = this.rotationRad + 90.toRadian()
+        rotation = (rotation + 10.toRadian()).normalizeAngle()
     }
 
-    // rotate
-    this.rotationRad = rotation.normalizeAngle()
+    // Update rotation
+    this.rotationRad = rotation
 }
+

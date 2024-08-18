@@ -81,15 +81,26 @@ fun Float.toRadian(): Float = this * PI / 180f
 fun Int.toRadian(): Float = this.toFloat() * PI / 180f
 
 
-
-fun isWall(x: Float, y: Float, map:IntArray, mapW:Int, mapH:Int, cellSize:Int): Boolean {
+fun isWall(x: Float, y: Float, map: IntArray, mapW: Int, mapH: Int, cellSize: Int): WallType {
     val mapX = (x / cellSize).toInt()
     val mapY = (y / cellSize).toInt()
     return if (mapX in 0 until mapW && mapY in 0 until mapH) {
-        map[mapY * mapW + mapX] == 1
+        when (map[mapY * mapW + mapX]) {
+            1, 2, 3 -> WallType.WALL
+            9 -> WallType.DOOR
+            else -> WallType.NONE
+
+        }
     } else {
-        true // Treat out-of-bounds as walls
+        WallType.WALL // Treat out-of-bounds as walls
     }
+}
+
+enum class WallType {
+    NONE,
+    WALL,
+    DOOR,
+    SECRET
 }
 
 
