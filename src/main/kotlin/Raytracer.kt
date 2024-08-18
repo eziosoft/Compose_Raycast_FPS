@@ -13,6 +13,9 @@ import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import models.Player
 import models.animate
@@ -48,7 +51,7 @@ val cellingTexture = readPpmImage("celling.ppm")
 private val wallDepths = FloatArray(W) // depth buffer
 
 private val playerPosition =
-    findPositionBasedOnMapIndex( mapX = MAP_X, mapY = MAP_Y, cellSize = CELL_SIZE, index = MAP.indexOf(-1))
+    findPositionBasedOnMapIndex(mapX = MAP_X, mapY = MAP_Y, cellSize = CELL_SIZE, index = MAP.indexOf(-1))
 private val player =
     Player(
         x = playerPosition.first,
@@ -83,6 +86,9 @@ fun getEnemiesFromMap(): List<Player> {
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun RayCaster() {
+    playMp3("soundtrack.mp3")
+
+
     var frame by remember { mutableStateOf(Screen(W, H)) }
 
     var pistolOffset by remember { mutableStateOf(IntOffset(0, 0)) }
@@ -514,7 +520,6 @@ fun movePlayer(pressedKeys: Set<Long>) {
         // open door
         MAP[MAP_X * (newY.toInt() / CELL_SIZE) + (player.x.toInt() / CELL_SIZE)] = 0
     }
-
 
 
 }

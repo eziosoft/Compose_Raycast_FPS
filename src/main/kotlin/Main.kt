@@ -46,16 +46,8 @@ fun main() = singleWindowApplication(
 
 
 ) {
-     val job = Job()
-     val scope = CoroutineScope(Dispatchers.Default + job)
-
     App()
 
-
-
-    scope.launch {
-        playMp3("soundtrack.mp3")
-    }
 }
 
 
