@@ -15,7 +15,7 @@ import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.singleWindowApplication
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import java.awt.Graphics
 import java.awt.image.BufferedImage
 import kotlin.math.abs
@@ -34,7 +34,6 @@ fun App() {
 }
 
 
-
 fun main() = singleWindowApplication(
     onKeyEvent = { event ->
         when (event.type) {
@@ -44,8 +43,19 @@ fun main() = singleWindowApplication(
         movePlayer(pressedKeys)
         false
     }
+
+
 ) {
+     val job = Job()
+     val scope = CoroutineScope(Dispatchers.Default + job)
+
     App()
+
+
+
+    scope.launch {
+        playMp3("soundtrack.mp3")
+    }
 }
 
 
