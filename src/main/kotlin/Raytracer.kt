@@ -4,8 +4,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.*
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.input.pointer.pointerMoveFilter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.loadImageBitmap
@@ -17,7 +18,6 @@ import models.Player
 import models.animate
 import models.distanceTo
 import models.walkRandom
-import java.awt.image.BufferedImage
 import kotlin.math.*
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
@@ -28,7 +28,7 @@ val pressedKeys = mutableSetOf<Long>()
 
 private const val W = 640
 private const val H = 480
-private const val FPS = 30
+private const val FPS = 60
 
 private val FOV_RAD = 60.toRadian()
 private const val MOVE_STEP = 0.2f
@@ -48,7 +48,7 @@ val cellingTexture = readPpmImage("celling.ppm")
 private val wallDepths = FloatArray(W) // depth buffer
 
 private val playerPosition =
-    findPositionBasedOnMapIndex(map = MAP, mapX = MAP_X, mapY = MAP_Y, cellSize = CELL_SIZE, index = MAP.indexOf(-1))
+    findPositionBasedOnMapIndex( mapX = MAP_X, mapY = MAP_Y, cellSize = CELL_SIZE, index = MAP.indexOf(-1))
 private val player =
     Player(
         x = playerPosition.first,
@@ -57,37 +57,22 @@ private val player =
         rotationRad = -90f.toRadian().normalizeAngle()
     )
 
-private val enemies = getEnemies()
+private val enemies = getEnemiesFromMap()
 
 private var renderTime: Duration = Duration.ZERO
 
 
-fun findPositionBasedOnMapIndex(map: IntArray, mapX: Int, mapY: Int, cellSize: Int, index: Int): Pair<Float, Float> {
+fun findPositionBasedOnMapIndex(mapX: Int, mapY: Int, cellSize: Int, index: Int): Pair<Float, Float> {
     val x = (index % mapX) * cellSize + cellSize / 2f
-    val y = (index / mapX) * cellSize + cellSize / 2f
+    val y = (index / mapY) * cellSize + cellSize / 2f
     return Pair(x, y)
 }
 
-fun generateRandomEnemies(): List<Player> {
-    val enemies = mutableListOf<Player>()
-    for (i in 0 until 10) {
-        enemies.add(
-            Player(
-                x = CELL_SIZE * (1 + (Math.random() * (MAP_X - 2)).toInt()) + CELL_SIZE / 2f,
-                y = CELL_SIZE * (1 + (Math.random() * (MAP_Y - 2)).toInt()) + CELL_SIZE / 2f,
-                z = 0f,
-                rotationRad = 0.toRadian()
-            )
-        )
-    }
-    return enemies
-}
-
-fun getEnemies(): List<Player> {
+fun getEnemiesFromMap(): List<Player> {
     val enemies = mutableListOf<Player>()
     MAP.forEachIndexed { index, value ->
         if (value == -2) {
-            val position = findPositionBasedOnMapIndex(MAP, MAP_X, MAP_Y, CELL_SIZE, index)
+            val position = findPositionBasedOnMapIndex(MAP_X, MAP_Y, CELL_SIZE, index)
             enemies.add(Player(x = position.first, y = position.second, z = 0f, rotationRad = 0f))
         }
     }
@@ -98,7 +83,7 @@ fun getEnemies(): List<Player> {
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun RayCaster() {
-    var frame by remember { mutableStateOf(ImageBitmap(W, H)) }
+    var frame by remember { mutableStateOf(Screen(W, H)) }
 
     var pistolOffset by remember { mutableStateOf(IntOffset(0, 0)) }
 
@@ -132,7 +117,7 @@ fun RayCaster() {
         // walls
         Image(
             modifier = Modifier.fillMaxSize(),
-            bitmap = frame,
+            bitmap = frame.getBitmap().toComposeImageBitmap(),
             contentDescription = null,
             contentScale = ContentScale.FillBounds,
             filterQuality = FilterQuality.None,
@@ -168,14 +153,14 @@ fun RayCaster() {
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
 
-//            println("render time: $renderTime")
+            println("render time: $renderTime")
         }
     }
 }
 
 
-private fun generateFrame(): ImageBitmap {
-    val bitmap = BufferedImage(W, H, BufferedImage.TYPE_INT_ARGB)
+private fun generateFrame(): Screen {
+    val bitmap = Screen(W, H)
 
     castRays(player, bitmap)
     drawMap(
@@ -192,15 +177,15 @@ private fun generateFrame(): ImageBitmap {
         drawSprite(bitmap, player, enemy, wallDepths)
     }
 
-    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
+//    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
 
 
-    return bitmap.toComposeImageBitmap()
+    return bitmap
 }
 
 
 // draws square in 3d world using 3d projection mapping
-private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wallDepths: FloatArray) {
+private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths: FloatArray) {
     // Calculate the angle from the enemy to the player
     val angleToPlayer = atan2(player.y - enemy.y, player.x - enemy.x)
 
@@ -262,11 +247,10 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wal
 
                         val texIndex = (texY * SPRITE_SIZE + texX) * 3
 
-                        val texColor = Color(
-                            texture[texIndex] / 255f,
-                            texture[texIndex + 1] / 255f,
-                            texture[texIndex + 2] / 255f,
-                            1f
+                        val texColor = Screen.Color(
+                            texture[texIndex],
+                            texture[texIndex + 1],
+                            texture[texIndex + 2],
                         )
 
 
@@ -276,7 +260,7 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wal
                             val intensity = (1.0f - (distance / 30.0f)).coerceIn(0.2f, 1f)
                             val shadedColor = darkenColor(texColor, intensity)
 
-                            bitmap.setRGB(x, y, shadedColor.toArgb())
+                            bitmap.setRGB(x, y, shadedColor)
                         }
                     }
                 }
@@ -287,7 +271,7 @@ private fun drawSprite(bitmap: BufferedImage, player: Player, enemy: Player, wal
 
 
 // Ray casting using DDA algorithm. Cover walls with walltexture. Add fish-eye correction.
-private fun castRays(player: Player, bitmap: BufferedImage) {
+private fun castRays(player: Player, bitmap: Screen) {
     val rayCount = W
     val rayStep = FOV_RAD / rayCount
 
@@ -395,17 +379,16 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
             texPos += step
 
             val texIndex = (texY * TEXTURE_SIZE + texX) * 3
-            val texColor = Color(
-                wallTexture[texIndex] / 255f,
-                wallTexture[texIndex + 1] / 255f,
-                wallTexture[texIndex + 2] / 255f,
-                1f
+            val texColor = Screen.Color(
+                wallTexture[texIndex],
+                wallTexture[texIndex + 1],
+                wallTexture[texIndex + 2],
             )
 
             val intensity = 1.0f - ((perpWallDist / 20.0f) + 0.4f * side).coerceAtMost(1f)
             val color = darkenColor(texColor, intensity)
 
-            bitmap.setRGB(x, y, color.toArgb())
+            bitmap.setRGB(x, y, color)
         }
 
         // Ceiling casting
@@ -422,15 +405,14 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
 
                 val texIndex = (ceilingTexY * TEXTURE_SIZE + ceilingTexX) * 3
                 if (texIndex >= 0) {
-                    val texColor = Color(
-                        cellingTexture[texIndex] / 255f,
-                        cellingTexture[texIndex + 1] / 255f,
-                        cellingTexture[texIndex + 2] / 255f,
-                        1f
+                    val texColor = Screen.Color(
+                        cellingTexture[texIndex],
+                        cellingTexture[texIndex + 1],
+                        cellingTexture[texIndex + 2],
                     )
 
                     val color = darkenColor(texColor, 0.5f) // Apply some darkness to the ceiling
-                    bitmap.setRGB(x, y, color.toArgb())
+                    bitmap.setRGB(x, y, color)
                 }
             }
         }
@@ -448,15 +430,14 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
 
                 val texIndex = (floorTexY * TEXTURE_SIZE + floorTexX) * 3
                 if (texIndex >= 0) {
-                    val texColor = Color(
-                        floorTexture[texIndex] / 255f,
-                        floorTexture[texIndex + 1] / 255f,
-                        floorTexture[texIndex + 2] / 255f,
-                        1f
+                    val texColor = Screen.Color(
+                        floorTexture[texIndex],
+                        floorTexture[texIndex + 1],
+                        floorTexture[texIndex + 2],
                     )
 
                     val color = darkenColor(texColor, 0.5f) // Apply some darkness to the floor
-                    bitmap.setRGB(x, y, color.toArgb())
+                    bitmap.setRGB(x, y, color)
                 }
             }
         }
@@ -465,14 +446,12 @@ private fun castRays(player: Player, bitmap: BufferedImage) {
 
 
 // Helper function to darken a color based on intensity
-private fun darkenColor(color: Color, intensity: Float): Color {
-    return Color(
-        red = (color.red * intensity).coerceIn(0f, 1f),
-        green = (color.green * intensity).coerceIn(0f, 1f),
-        blue = (color.blue * intensity).coerceIn(0f, 1f),
-        alpha = 1f
+private fun darkenColor(color: Screen.Color, intensity: Float): Screen.Color =
+    Screen.Color(
+        (color.red * intensity).toInt(),
+        (color.green * intensity).toInt(),
+        (color.blue * intensity).toInt(),
     )
-}
 
 
 fun movePlayer(pressedKeys: Set<Long>) {

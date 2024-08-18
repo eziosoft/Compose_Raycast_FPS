@@ -1,52 +1,73 @@
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.toArgb
 import java.awt.image.BufferedImage
 import kotlin.math.abs
 
-fun drawFilledRect(bitmap: BufferedImage, x: Int, y: Int, w: Int, h: Int, color: Color) {
-    for (i in x until x + w) {
-        for (j in y until y + h) {
-            if (i < 0 || i >= bitmap.width || j < 0 || j >= bitmap.height) {
-                continue
+class Screen(val w: Int, val h: Int, color: Color = Color(0, 0, 0)) {
+    private val bitmap = Array(w * h) { color }
+
+    fun setRGB(x: Int, y: Int, color: Color) {
+        bitmap[y * w + x] = color
+    }
+
+    private fun getRGB(x: Int, y: Int): Color {
+        return bitmap[y * w + x]
+    }
+
+    fun getBitmap(): BufferedImage {
+        val image = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
+        for (i in 0 until w) {
+            for (j in 0 until h) {
+                image.setRGB(i, j, getRGB(i, j).toArgb())
             }
+        }
+        return image
+    }
 
-            bitmap.setRGB(i, j, color.toArgb())
+    fun drawFilledRect(x: Int, y: Int, w: Int, h: Int, color: Color) {
+        for (i in x until x + w) {
+            for (j in y until y + h) {
+                setRGB(i, j, color)
+            }
+        }
+    }
+
+    fun drawLine(x1: Int, y1: Int, x2: Int, y2: Int, color: Color) {
+        val dx = abs(x2 - x1)
+        val dy = abs(y2 - y1)
+        val sx = if (x1 < x2) 1 else -1
+        val sy = if (y1 < y2) 1 else -1
+        var err = dx - dy
+
+        var x = x1
+        var y = y1
+
+        while (true) {
+            setRGB(x, y, color)
+
+            if (x == x2 && y == y2) break
+
+            val e2 = 2 * err
+            if (e2 > -dy) {
+                err -= dy
+                x += sx
+            }
+            if (e2 < dx) {
+                err += dx
+                y += sy
+            }
+        }
+    }
+
+
+    data class Color(val red: Int, val green: Int, val blue: Int) {
+        fun toArgb(): Int {
+            return (red shl 16) or (green shl 8) or blue
         }
     }
 }
 
-fun drawLine(bitmap: BufferedImage, x1: Int, y1: Int, x2: Int, y2: Int, color: Color) {
-    val dx = abs(x2 - x1)
-    val dy = abs(y2 - y1)
 
-    val sx = if (x1 < x2) 1 else -1
-    val sy = if (y1 < y2) 1 else -1
 
-    var err = dx - dy
 
-    var x = x1
-    var y = y1
 
-    while (true) {
-        bitmap.setRGB(x, y, color.toArgb())
 
-        if (x == x2 && y == y2) break
 
-        val e2 = 2 * err
-        if (e2 > -dy) {
-            err -= dy
-            x += sx
-        }
-        if (e2 < dx) {
-            err += dx
-            y += sy
-        }
-    }
-}
-
-fun drawText(bitmap: BufferedImage, x:Int, y: Int, text: String, color: Color) {
-    val g = bitmap.graphics
-    g.color = java.awt.Color(color.red, color.green, color.blue)
-    g.drawString(text, x, y)
-}
