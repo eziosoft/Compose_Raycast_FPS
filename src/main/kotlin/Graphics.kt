@@ -5,8 +5,12 @@ class Screen(val w: Int, val h: Int, color: Color = Color(0, 0, 0)) {
     private val bitmap = Array(w * h) { color }
 
     fun setRGB(x: Int, y: Int, color: Color) {
+        if(x < 0 || x >= w || y < 0 || y >= h) return
+
         bitmap[y * w + x] = color
     }
+
+
 
     private fun getRGB(x: Int, y: Int): Color {
         return bitmap[y * w + x]
@@ -53,6 +57,21 @@ class Screen(val w: Int, val h: Int, color: Color = Color(0, 0, 0)) {
             if (e2 < dx) {
                 err += dx
                 y += sy
+            }
+        }
+    }
+
+    fun drawBitmap(bitmap:IntArray, x: Int, y: Int, bitmapSizeX: Int, bitmapSizeY: Int, transparentColor:Color){
+        for (i in 0 until bitmapSizeX) {
+            for (j in 0 until bitmapSizeY) {
+                val color = Color(
+                    bitmap[(j * bitmapSizeX + i) * 3],
+                    bitmap[(j * bitmapSizeX + i) * 3 + 1],
+                    bitmap[(j * bitmapSizeX + i) * 3 + 2]
+                )
+                if (color != transparentColor) {
+                    setRGB(x + i, y + j, color)
+                }
             }
         }
     }

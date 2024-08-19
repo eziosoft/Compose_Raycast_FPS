@@ -1,5 +1,8 @@
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -12,15 +15,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.loadImageBitmap
 import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import models.Player
-import models.animate
-import models.distanceTo
-import models.walkRandom
+import models.*
 import kotlin.math.*
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
@@ -46,6 +42,17 @@ private const val PLAYER_SIZE = 5f // square on the map
 
 val floorTexture = readPpmImage("floor.ppm")
 val cellingTexture = readPpmImage("celling.ppm")
+
+
+val pistolTextureSheet = readPpmImage("pistol2.ppm")
+val pistolTexture = mapOf(
+    0 to selectFrame(pistolTextureSheet, 0, 0, 128, 384, 0),
+    1 to selectFrame(pistolTextureSheet, 1, 0, 128, 384, 0),
+    2 to selectFrame(pistolTextureSheet, 2, 0, 128, 384, 0),
+    3 to selectFrame(pistolTextureSheet, 0, 1, 128, 384, 0),
+    4 to selectFrame(pistolTextureSheet, 1, 1, 128, 384, 0),
+    5 to selectFrame(pistolTextureSheet, 2, 1, 128, 384, 0)
+)
 
 
 private val wallDepths = FloatArray(W) // depth buffer
@@ -130,11 +137,11 @@ fun RayCaster() {
         )
 
         // pistol
-        Image(
-            modifier = Modifier.align(Alignment.BottomCenter).size(200.dp).offset(pistolOffset.x.dp, pistolOffset.y.dp),
-            bitmap = useResource("pistol.webp") { loadImageBitmap(it) },
-            contentDescription = null,
-        )
+//        Image(
+//            modifier = Modifier.align(Alignment.BottomCenter).size(200.dp).offset(pistolOffset.x.dp, pistolOffset.y.dp),
+//            bitmap = useResource("pistol.webp") { loadImageBitmap(it) },
+//            contentDescription = null,
+//        )
     }
 
 
@@ -146,7 +153,7 @@ fun RayCaster() {
 
                 enemies.forEach { enemy ->
                     enemy.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
-                    enemy.animate()
+                    enemy.animate(PlayerState.WALKING)
                 }
 
                 if (pressedKeys.isNotEmpty()) {
@@ -159,7 +166,7 @@ fun RayCaster() {
             }
             delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
 
-            println("render time: $renderTime")
+//            println("render time: $renderTime")
         }
     }
 }
@@ -184,10 +191,37 @@ private fun generateFrame(): Screen {
     )
 
 
+    // pistol
+    bitmap.drawBitmap(
+        bitmap = pistolTexture[player.shootingFrame]!!,
+        x = 2 * bitmap.w / 3 + (20 * sin(player.x)).toInt(),
+        y = (bitmap.h - 175 * 0.8f + 20 - 10 * sin(player.y)).toInt(),
+        bitmapSizeX = 128,
+        bitmapSizeY = 128,
+        transparentColor = Screen.Color(0, 255, 255)
+    )
+
+    drawCross(bitmap)
+
+    player.animate()
+    println("${player.state}  ${player.shootingFrame}")
+
+
 //    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
 
 
     return bitmap
+}
+
+private fun drawCross(bitmap: Screen) {
+    val crossSize = 10
+    val crossColor = Screen.Color(255, 255, 255)
+
+    val x = W / 2 - crossSize / 2
+    val y = H / 2 - crossSize / 2
+
+    bitmap.drawLine(x, y, x + crossSize, y + crossSize, crossColor)
+    bitmap.drawLine(x + crossSize, y, x, y + crossSize, crossColor)
 }
 
 
@@ -491,6 +525,10 @@ fun movePlayer(pressedKeys: Set<Long>) {
     }
     if (292594647040 in pressedKeys) { // Down arrow key
         dr += ROTATION_STEP_RAD
+    }
+
+    if (137975824384 in pressedKeys) { // Space key
+        player.animate(PlayerState.SHOOTING)
     }
 
     // Apply rotation

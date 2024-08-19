@@ -9,7 +9,8 @@ import kotlin.math.sin
 
 enum class PlayerState {
     IDLE,
-    WALKING
+    WALKING,
+    SHOOTING
 }
 
 data class Player(
@@ -18,13 +19,41 @@ data class Player(
     var z: Float,
     var rotationRad: Float = 0f,
     var walkingFrame: Int = 0,
+    var shootingFrame: Int = 0,
     var state: PlayerState = PlayerState.IDLE,
     var timer: Int = 0
 )
 
-fun Player.animate() {
+fun Player.animate(state: PlayerState? = null) {
+    state?.let {
+        this.state = it
+    }
+
+    if (this.state == PlayerState.WALKING) {
+        this.walk()
+    } else if (this.state == PlayerState.SHOOTING) {
+        this.shoot()
+    }
+}
+
+private fun Player.walk() {
+
     if (this.timer % 7 == 0) {
         this.walkingFrame = (this.walkingFrame + 1) % 4
+    }
+    this.timer++
+}
+
+private fun Player.shoot(frameCount: Int = 6) {
+
+
+    if (this.shootingFrame >= frameCount - 1) {
+        this.state = PlayerState.WALKING
+        shootingFrame = 0
+        return
+    }
+    if (this.timer % 7 == 0) {
+        this.shootingFrame = (this.shootingFrame + 1)
     }
     this.timer++
 }
