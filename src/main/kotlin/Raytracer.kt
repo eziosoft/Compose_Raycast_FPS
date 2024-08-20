@@ -539,6 +539,11 @@ fun movePlayer(pressedKeys: Set<Long>) {
         MAP[MAP_X * (newY.toInt() / CELL_SIZE) + (player.x.toInt() / CELL_SIZE)] = 0
     }
 
+    // Exit
+    if (isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.EXIT) {
+        error("You win!")
+    }
+
 
 }
 
