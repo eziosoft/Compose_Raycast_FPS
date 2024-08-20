@@ -1,20 +1,11 @@
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.input.pointer.pointerMoveFilter
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.loadImageBitmap
-import androidx.compose.ui.res.useResource
-import androidx.compose.ui.unit.IntOffset
 import kotlinx.coroutines.delay
 import models.*
 import kotlin.math.*
@@ -88,7 +79,7 @@ fun getEnemiesFromMap(): List<Player> {
                     x = position.first,
                     y = position.second,
                     rotationRad = 0f,
-                    state = PlayerState.WALKING,
+                    state = PlayerState.IDLE,
                     isMainPlayer = false
                 )
             )
@@ -173,7 +164,7 @@ private fun generateFrame(): Screen {
 
 
     player.animate()
-    println("${player.state}  ${player.shootingFrame}")
+//    println("${player.state}  ${player.shootingFrame}")
 
 
 //    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
