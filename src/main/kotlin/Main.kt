@@ -48,6 +48,8 @@ fun main() = singleWindowApplication(
 ) {
     App()
 
+    playSound("soundtrack.mp3")
+
 }
 
 

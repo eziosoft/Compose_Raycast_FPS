@@ -1,10 +1,6 @@
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.useResource
-import java.awt.image.BufferedImage
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import kotlin.math.abs
 
 
 const val PI = 3.1415927f

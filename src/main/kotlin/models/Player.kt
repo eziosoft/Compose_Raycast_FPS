@@ -1,5 +1,11 @@
 package models
 
+import CELL_SIZE
+import MAP
+import MAP_X
+import MAP_Y
+import PI
+import WallType
 import isWall
 import normalizeAngle
 import toRadian
@@ -10,18 +16,21 @@ import kotlin.math.sin
 enum class PlayerState {
     IDLE,
     WALKING,
-    SHOOTING
+    SHOOTING,
+    DYING,
+    DEAD
 }
 
 data class Player(
     var x: Float,
     var y: Float,
-    var z: Float,
     var rotationRad: Float = 0f,
     var walkingFrame: Int = 0,
     var shootingFrame: Int = 0,
+    var dyingFrame: Int = 0,
     var state: PlayerState = PlayerState.IDLE,
-    var timer: Int = 0
+    var timer: Int = 0,
+    val isMainPlayer: Boolean
 )
 
 fun Player.animate(state: PlayerState? = null) {
@@ -29,11 +38,26 @@ fun Player.animate(state: PlayerState? = null) {
         this.state = it
     }
 
-    if (this.state == PlayerState.WALKING) {
-        this.walk()
-    } else if (this.state == PlayerState.SHOOTING) {
-        this.shoot()
+    when (this.state) {
+        PlayerState.WALKING -> {
+            this.walk()
+            if (!isMainPlayer) {
+                this.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
+            }
+        }
+        PlayerState.SHOOTING -> {
+            this.shoot()
+        }
+        PlayerState.DYING -> {
+            this.dying(5)
+        }
+
+        PlayerState.DEAD -> this.dead()
+
+        PlayerState.IDLE -> {}//TODO()
     }
+
+
 }
 
 private fun Player.walk() {
@@ -45,8 +69,6 @@ private fun Player.walk() {
 }
 
 private fun Player.shoot(frameCount: Int = 6) {
-
-
     if (this.shootingFrame >= frameCount - 1) {
         this.state = PlayerState.WALKING
         shootingFrame = 0
@@ -58,8 +80,40 @@ private fun Player.shoot(frameCount: Int = 6) {
     this.timer++
 }
 
+private fun Player.dying(frameCount: Int) {
+
+    if (this.dyingFrame >= frameCount - 1) {
+        this.dead()
+        return
+    }
+    if (this.timer % 7 == 0) {
+        this.dyingFrame = (this.dyingFrame + 1)
+    }
+    this.timer++
+
+}
+
+private fun Player.dead(){
+    this.state = PlayerState.DEAD
+    dyingFrame = 4
+}
+
 fun Player.distanceTo(player: Player): Float {
     return kotlin.math.sqrt((this.x - player.x) * (this.x - player.x) + (this.y - player.y) * (this.y - player.y))
+}
+
+fun Player.angleTo(player: Player): Float {
+    return kotlin.math.atan2(player.y - this.y, player.x - this.x)
+}
+
+fun Player.inShotAngle(player: Player): Boolean {
+    val angle = this.angleTo(player)
+    var diff = this.rotationRad - angle
+
+    // Normalize the difference to the range [-π, π]
+    diff = (diff + PI).rem(2 * PI) - PI
+
+    return kotlin.math.abs(diff) < 10.toRadian()
 }
 
 

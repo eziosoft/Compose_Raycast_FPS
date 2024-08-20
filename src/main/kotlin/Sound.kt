@@ -1,18 +1,15 @@
 import androidx.compose.ui.res.useResource
-import javazoom.jl.player.Player
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
+import javazoom.jl.player.advanced.AdvancedPlayer
 
-fun playMp3(filePath: String) {
-     val job = Job()
-     val scope = CoroutineScope(Dispatchers.Default + job)
-
-    scope.launch {
-        useResource(filePath) {
-            val player = Player(it)
-            player.play()
+fun playSound(resourceFilePath: String) {
+    Thread {
+        try {
+            useResource(resourceFilePath) {
+                val player = AdvancedPlayer(it)
+                player.play()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
-    }
+    }.start()
 }

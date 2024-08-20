@@ -1,3 +1,4 @@
+import models.PlayerState
 
 const val SPRITE_SIZE = 64
 
@@ -59,17 +60,53 @@ private val guardWalking4 = mapOf(
     7 to selectFrame(guardTextureSheet, 7, 4, SPRITE_SIZE, 8 * SPRITE_SIZE, 1),
 )
 
+private val guardDyingFrames = mapOf(
+    0 to selectFrame(guardTextureSheet, 0, 5, SPRITE_SIZE, 8 * SPRITE_SIZE, 1),
+    1 to selectFrame(guardTextureSheet, 1, 5, SPRITE_SIZE, 8 * SPRITE_SIZE, 1),
+    2 to selectFrame(guardTextureSheet, 2, 5, SPRITE_SIZE, 8 * SPRITE_SIZE, 1),
+    3 to selectFrame(guardTextureSheet, 3, 5, SPRITE_SIZE, 8 * SPRITE_SIZE, 1),
+    4 to selectFrame(guardTextureSheet, 4, 5, SPRITE_SIZE, 8 * SPRITE_SIZE, 1),
+)
+
 fun getGuardTexture(
     direction: Int,
-    walking: Boolean,
-    walkingFrame: Int
+    state: PlayerState,
+    walkingFrame: Int,
+    dyingFrame: Int
 ): IntArray {
-    return when {
-        !walking -> guardStill[direction]!!
-        walking && walkingFrame == 0 -> guardWalking1[direction]!!
-        walking && walkingFrame == 1 -> guardWalking2[direction]!!
-        walking && walkingFrame == 2 -> guardWalking3[direction]!!
-        walking && walkingFrame == 3 -> guardWalking4[direction]!!
-        else -> guardStill[direction]!!
+    when (state) {
+        PlayerState.WALKING -> {
+            return getGuardWalkingTexture(direction, walkingFrame)
+        }
+
+        PlayerState.DYING -> {
+            return getGuardDyingTexture(dyingFrame)
+        }
+
+        PlayerState.DEAD -> {
+            return getGuardDyingTexture(dyingFrame)
+        }
+
+        else -> {
+            return getGuardStillTexture(direction)
+        }
     }
+}
+
+private fun getGuardStillTexture(direction: Int): IntArray {
+    return guardStill[direction]!!
+}
+
+private fun getGuardWalkingTexture(direction: Int, walkingFrame: Int): IntArray {
+    return when (walkingFrame) {
+        0 -> guardWalking1[direction]!!
+        1 -> guardWalking2[direction]!!
+        2 -> guardWalking3[direction]!!
+        3 -> guardWalking4[direction]!!
+        else -> guardWalking1[direction]!!
+    }
+}
+
+private fun getGuardDyingTexture(dyingFrame: Int): IntArray {
+    return guardDyingFrames[dyingFrame]!!
 }

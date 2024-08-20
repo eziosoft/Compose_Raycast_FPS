@@ -35,7 +35,7 @@ private val ROTATION_STEP_RAD = 2f.toRadian()
 
 const val TEXTURE_SIZE = 64 //walls, floor and ceiling textures
 
-private const val CELL_SIZE = 2
+const val CELL_SIZE = 2
 private const val PLAYER_SIZE = 5f // square on the map
 
 // load textures
@@ -63,8 +63,8 @@ private val player =
     Player(
         x = playerPosition.first,
         y = playerPosition.second,
-        z = 0f,
-        rotationRad = -90f.toRadian().normalizeAngle()
+        rotationRad = -90f.toRadian().normalizeAngle(),
+        isMainPlayer = true
     )
 
 private val enemies = getEnemiesFromMap()
@@ -83,7 +83,15 @@ fun getEnemiesFromMap(): List<Player> {
     MAP.forEachIndexed { index, value ->
         if (value == -2) {
             val position = findPositionBasedOnMapIndex(MAP_X, MAP_Y, CELL_SIZE, index)
-            enemies.add(Player(x = position.first, y = position.second, z = 0f, rotationRad = 0f))
+            enemies.add(
+                Player(
+                    x = position.first,
+                    y = position.second,
+                    rotationRad = 0f,
+                    state = PlayerState.WALKING,
+                    isMainPlayer = false
+                )
+            )
         }
     }
     return enemies
@@ -93,56 +101,17 @@ fun getEnemiesFromMap(): List<Player> {
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun RayCaster() {
-    playMp3("soundtrack.mp3")
-
 
     var frame by remember { mutableStateOf(Screen(W, H)) }
 
-    var pistolOffset by remember { mutableStateOf(IntOffset(0, 0)) }
 
-    Box(modifier = Modifier
-        .fillMaxSize()
-        .pointerMoveFilter(
-            onMove = {
-                player.rotationRad = (it.x / 200f).normalizeAngle()
-                false
-            }
-        ), contentAlignment = Alignment.Center) {
-
-        // background: floor and celling
-        Column(modifier = Modifier.fillMaxSize()) {
-            Image(
-                modifier = Modifier.fillMaxSize().aspectRatio(1f)
-                    .graphicsLayer(
-                        scaleX = 20f,
-                        scaleY = 20f,
-                        rotationX = -25f,
-                        rotationZ = (player.rotationRad * 180 / PI),
-                        translationY = -H * 2.toFloat()
-                    ),
-                bitmap = useResource("sky4.jpg") { loadImageBitmap(it) },
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
-
-                )
-        }
-
-        // walls
-        Image(
-            modifier = Modifier.fillMaxSize(),
-            bitmap = frame.getBitmap().toComposeImageBitmap(),
-            contentDescription = null,
-            contentScale = ContentScale.FillBounds,
-            filterQuality = FilterQuality.None,
-        )
-
-        // pistol
-//        Image(
-//            modifier = Modifier.align(Alignment.BottomCenter).size(200.dp).offset(pistolOffset.x.dp, pistolOffset.y.dp),
-//            bitmap = useResource("pistol.webp") { loadImageBitmap(it) },
-//            contentDescription = null,
-//        )
-    }
+    Image(
+        modifier = Modifier.fillMaxSize(),
+        bitmap = frame.getBitmap().toComposeImageBitmap(),
+        contentDescription = null,
+        contentScale = ContentScale.FillBounds,
+        filterQuality = FilterQuality.None,
+    )
 
 
 
@@ -152,12 +121,7 @@ fun RayCaster() {
             renderTime = measureTime {
 
                 enemies.forEach { enemy ->
-                    enemy.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
-                    enemy.animate(PlayerState.WALKING)
-                }
-
-                if (pressedKeys.isNotEmpty()) {
-                    pistolOffset = IntOffset((20 * sin(player.x)).toInt(), (20 - 10 * sin(player.y)).toInt())
+                    enemy.animate()
                 }
 
                 movePlayer(pressedKeys)
@@ -201,7 +165,12 @@ private fun generateFrame(): Screen {
         transparentColor = Screen.Color(0, 255, 255)
     )
 
-    drawCross(bitmap)
+    enemies.forEach{enemy ->
+        if (player.distanceTo(enemy) < 10 && player.inShotAngle(enemy)) {
+            drawCross(bitmap)
+        }
+    }
+
 
     player.animate()
     println("${player.state}  ${player.shootingFrame}")
@@ -241,7 +210,12 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
     val textureIndex = numTextures - ((diff / (2 * PI) * numTextures) + numTextures) % numTextures
 
     // Fetch the correct texture for rendering
-    val texture = getGuardTexture(direction = textureIndex.toInt(), walking = true, walkingFrame = enemy.walkingFrame)
+    val texture = getGuardTexture(
+        direction = textureIndex.toInt(),
+        state = enemy.state,
+        walkingFrame = enemy.walkingFrame,
+        dyingFrame = enemy.dyingFrame
+    )
 
     val pointHeight = CELL_SIZE // Height of the square in world units
 
@@ -317,8 +291,6 @@ private fun castRays(player: Player, bitmap: Screen) {
     val rayStep = FOV_RAD / rayCount
 
     for (x in 0 until rayCount) {
-        val cameraX = 2.0 * x / W - 1.0 // x-coordinate in camera space
-
         val rayAngle = player.rotationRad - FOV_RAD / 2 + x * rayStep
 
         val rayDirX = cos(rayAngle)
@@ -529,6 +501,14 @@ fun movePlayer(pressedKeys: Set<Long>) {
 
     if (137975824384 in pressedKeys) { // Space key
         player.animate(PlayerState.SHOOTING)
+        playSound("gunshot1.mp3")
+
+        enemies.forEach { enemy ->
+            if (player.distanceTo(enemy) < 10 && player.inShotAngle(enemy)) {
+                enemy.state = PlayerState.DYING
+                playSound("mandeathscream.mp3")
+            }
+        }
     }
 
     // Apply rotation
