@@ -6,8 +6,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import engine.*
+import engine.textures.readPpmImage
 import kotlinx.coroutines.delay
+import maps.Map
+import maps.Map1
 import models.*
+import sprites.GuardSprite
+import sprites.PistolSprite
 import kotlin.math.*
 import kotlin.time.Duration
 import kotlin.time.DurationUnit
@@ -24,32 +30,29 @@ private val FOV_RAD = 60.toRadian()
 private const val MOVE_STEP = 0.2f
 private val ROTATION_STEP_RAD = 2f.toRadian()
 
+const val CELL_SIZE = 2
 const val TEXTURE_SIZE = 64 //walls, floor and ceiling textures
 
-const val CELL_SIZE = 2
+
 private const val PLAYER_SIZE = 5f // square on the map
 
 // load textures
 
-val floorTexture = readPpmImage("floor.ppm")
-val cellingTexture = readPpmImage("celling.ppm")
+val floorTexture = readPpmImage("textures/floor.ppm")
+val cellingTexture = readPpmImage("textures/celling.ppm")
 
-
-val pistolTextureSheet = readPpmImage("pistol2.ppm")
-val pistolTexture = mapOf(
-    0 to selectFrame(pistolTextureSheet, 0, 0, 128, 384, 0),
-    1 to selectFrame(pistolTextureSheet, 1, 0, 128, 384, 0),
-    2 to selectFrame(pistolTextureSheet, 2, 0, 128, 384, 0),
-    3 to selectFrame(pistolTextureSheet, 0, 1, 128, 384, 0),
-    4 to selectFrame(pistolTextureSheet, 1, 1, 128, 384, 0),
-    5 to selectFrame(pistolTextureSheet, 2, 1, 128, 384, 0)
-)
+val currentMap: Map = Map1
 
 
 private val wallDepths = FloatArray(W) // depth buffer
 
 private val playerPosition =
-    findPositionBasedOnMapIndex(mapX = MAP_X, mapY = MAP_Y, cellSize = CELL_SIZE, index = MAP.indexOf(-1))
+    findPositionBasedOnMapIndex(
+        mapX = currentMap.MAP_X,
+        mapY = currentMap.MAP_Y,
+        cellSize = CELL_SIZE,
+        index = currentMap.MAP.indexOf(-1)
+    )
 private val player =
     Player(
         x = playerPosition.first,
@@ -71,15 +74,15 @@ fun findPositionBasedOnMapIndex(mapX: Int, mapY: Int, cellSize: Int, index: Int)
 
 fun getEnemiesFromMap(): List<Player> {
     val enemies = mutableListOf<Player>()
-    MAP.forEachIndexed { index, value ->
+    currentMap.MAP.forEachIndexed { index, value ->
         if (value == -2) {
-            val position = findPositionBasedOnMapIndex(MAP_X, MAP_Y, CELL_SIZE, index)
+            val position = findPositionBasedOnMapIndex(currentMap.MAP_X, currentMap.MAP_Y, CELL_SIZE, index)
             enemies.add(
                 Player(
                     x = position.first,
                     y = position.second,
                     rotationRad = 0f,
-                    state = PlayerState.IDLE,
+                    state = PlayerState.WALKING,
                     isMainPlayer = false
                 )
             )
@@ -112,7 +115,7 @@ fun RayCaster() {
             renderTime = measureTime {
 
                 enemies.forEach { enemy ->
-                    enemy.animate()
+                    enemy.animate(map = currentMap, cellSize = CELL_SIZE)
                 }
 
                 movePlayer(pressedKeys)
@@ -128,17 +131,18 @@ fun RayCaster() {
 
 
 private fun generateFrame(): Screen {
-    val bitmap = Screen(W, H)
+    val screen = Screen(W, H)
 
-    castRays(player, bitmap)
+    castRays(player, screen)
     enemies.sortedByDescending { it.distanceTo(player) }.forEach { enemy ->
-        drawSprite(bitmap, player, enemy, wallDepths)
+        drawSprite(screen, player, enemy, wallDepths)
     }
 
     drawMap(
-        bitmap = bitmap,
+        screen = screen,
+        map = currentMap,
         xOffset = 10,
-        yOffset = H - CELL_SIZE * MAP_Y - 10,
+        yOffset = H - CELL_SIZE * currentMap.MAP_Y - 10,
         player = player,
         enemies = enemies,
         cellSize = CELL_SIZE,
@@ -147,30 +151,30 @@ private fun generateFrame(): Screen {
 
 
     // pistol
-    bitmap.drawBitmap(
-        bitmap = pistolTexture[player.shootingFrame]!!,
-        x = 2 * bitmap.w / 3 + (20 * sin(player.x)).toInt(),
-        y = (bitmap.h - 175 * 0.8f + 20 - 10 * sin(player.y)).toInt(),
+    screen.drawBitmap(
+        bitmap = PistolSprite.getFrame(player.shootingFrame)!!,
+        x = 2 * screen.w / 3 + (20 * sin(player.x)).toInt(),
+        y = (screen.h - 175 * 0.8f + 20 - 10 * sin(player.y)).toInt(),
         bitmapSizeX = 128,
         bitmapSizeY = 128,
-        transparentColor = Screen.Color(0, 255, 255)
+        transparentColor = PistolSprite.TRANSPARENT_COLOR
     )
 
-    enemies.forEach{enemy ->
+    enemies.forEach { enemy ->
         if (player.distanceTo(enemy) < 10 && player.inShotAngle(enemy)) {
-            drawCross(bitmap)
+            drawCross(screen)
         }
     }
 
 
-    player.animate()
+    player.animate(map = currentMap, cellSize = CELL_SIZE)
 //    println("${player.state}  ${player.shootingFrame}")
 
 
 //    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
 
 
-    return bitmap
+    return screen
 }
 
 private fun drawCross(bitmap: Screen) {
@@ -194,14 +198,14 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
     var diff = angleToPlayer - enemy.rotationRad
 
     // Normalize the angle difference to be between -PI and PI
-    diff = (diff + PI) % (2 * PI) - PI
+    diff = (diff + engine.PI) % (2 * engine.PI) - engine.PI
 
     // Calculate the texture index, ensuring it falls within the valid range
     val numTextures = 8  // Assuming there are 8 textures in the textureSet
-    val textureIndex = numTextures - ((diff / (2 * PI) * numTextures) + numTextures) % numTextures
+    val textureIndex = numTextures - ((diff / (2 * engine.PI) * numTextures) + numTextures) % numTextures
 
     // Fetch the correct texture for rendering
-    val texture = getGuardTexture(
+    val texture = GuardSprite.getTexture(
         direction = textureIndex.toInt(),
         state = enemy.state,
         walkingFrame = enemy.walkingFrame,
@@ -221,7 +225,7 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
     var angle = atan2(dy, dx) - player.rotationRad
 
     // Normalize angle to be between -PI and PI
-    angle = (angle + PI) % (2 * PI) - PI
+    angle = (angle + engine.PI) % (2 * engine.PI) - engine.PI
 
     // Check if enemy is within player's FOV
     if (abs(angle) < FOV_RAD / 2) {
@@ -238,7 +242,7 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
         // Calculate perceived width of the square
         val perceivedWidth = perceivedHeight
 
-        // Draw the textured square
+        // Draw sprite
         for (y in topY..bottomY) {
             for (x in (screenX - perceivedWidth / 2)..(screenX + perceivedWidth / 2)) {
                 if (x >= 0 && x < W) {
@@ -248,10 +252,11 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
                     if (wallDepths[x] - (distance / CELL_SIZE) > -0.1) {
                         // Calculate texture coordinates
                         val texX =
-                            ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * SPRITE_SIZE).toInt() % SPRITE_SIZE
-                        val texY = ((y - topY).toFloat() / perceivedHeight * SPRITE_SIZE).toInt() % SPRITE_SIZE
+                            ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * GuardSprite.SPRITE_SIZE).toInt() % GuardSprite.SPRITE_SIZE
+                        val texY =
+                            ((y - topY).toFloat() / perceivedHeight * GuardSprite.SPRITE_SIZE).toInt() % GuardSprite.SPRITE_SIZE
 
-                        val texIndex = (texY * SPRITE_SIZE + texX) * 3
+                        val texIndex = (texY * GuardSprite.SPRITE_SIZE + texX) * 3
 
                         val texColor = Screen.Color(
                             texture[texIndex],
@@ -261,7 +266,7 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
 
 
 
-                        if (texColor != TRANSPARENT_COLOR) {
+                        if (texColor != GuardSprite.TRANSPARENT_COLOR) {
                             // Apply distance-based shading
                             val intensity = (1.0f - (distance / 30.0f)).coerceIn(0.2f, 1f)
                             val shadedColor = darkenColor(texColor, intensity)
@@ -276,7 +281,7 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
 }
 
 
-// Ray casting using DDA algorithm. Cover walls with walltexture. Add fish-eye correction.
+// Ray casting using DDA algorithm. Cover walls with wall texture. Add fish-eye correction.
 private fun castRays(player: Player, bitmap: Screen) {
     val rayCount = W
     val rayStep = FOV_RAD / rayCount
@@ -332,12 +337,12 @@ private fun castRays(player: Player, bitmap: Screen) {
             }
 
 
-            if (mapX < 0 || mapX >= MAP_X || mapY < 0 || mapY >= MAP_Y) {
+            if (mapX < 0 || mapX >= currentMap.MAP_X || mapY < 0 || mapY >= currentMap.MAP_Y) {
                 hit = true
             } else
-                if (MAP[mapY * MAP_X + mapX] > 0) {
+                if (currentMap.MAP[mapY * currentMap.MAP_X + mapX] > 0) {
                     hit = true
-                    wallTextureIndex = MAP[mapY * MAP_X + mapX]
+                    wallTextureIndex = currentMap.MAP[mapY * currentMap.MAP_X + mapX]
                 }
         }
 
@@ -376,7 +381,7 @@ private fun castRays(player: Player, bitmap: Screen) {
         var texPos = (drawStart - H / 2 + lineHeight / 2) * step
 
 
-        val wallTexture = wallTextures[wallTextureIndex] ?: error("Wall texture not found $wallTextureIndex")
+        val wallTexture = Walls.wallTextures[wallTextureIndex] ?: error("Wall texture not found $wallTextureIndex")
 
         for (y in drawStart until drawEnd) {
             val texY = (texPos.toInt() and (TEXTURE_SIZE - 1))
@@ -491,13 +496,13 @@ fun movePlayer(pressedKeys: Set<Long>) {
     }
 
     if (137975824384 in pressedKeys) { // Space key
-        player.animate(PlayerState.SHOOTING)
-        playSound("gunshot1.mp3")
+        player.animate(state = PlayerState.SHOOTING, map = currentMap, cellSize = CELL_SIZE)
+        playSound("sound/gunshot1.mp3")
 
         enemies.forEach { enemy ->
             if (player.distanceTo(enemy) < 10 && player.inShotAngle(enemy)) {
                 enemy.state = PlayerState.DYING
-                playSound("mandeathscream.mp3")
+                playSound("sound/mandeathscream.mp3")
             }
         }
     }
@@ -510,28 +515,28 @@ fun movePlayer(pressedKeys: Set<Long>) {
     val newX = player.x + dx
     val newY = player.y + dy
 
-    if (isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.NONE) {
+    if (isWall(newX, player.y, currentMap.MAP, currentMap.MAP_X, currentMap.MAP_Y, CELL_SIZE) == WallType.NONE) {
         player.x = newX
     }
 
-    if (isWall(player.x, newY, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.NONE) {
+    if (isWall(player.x, newY, currentMap.MAP, currentMap.MAP_X, currentMap.MAP_Y, CELL_SIZE) == WallType.NONE) {
         player.y = newY
     }
 
     // Open door
 
-    if (isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.DOOR) {
+    if (isWall(newX, player.y, currentMap.MAP, currentMap.MAP_X, currentMap.MAP_Y, CELL_SIZE) == WallType.DOOR) {
         // open door
-        MAP[MAP_X * (player.y.toInt() / CELL_SIZE) + (newX.toInt() / CELL_SIZE)] = 0
+        currentMap.MAP[currentMap.MAP_X * (player.y.toInt() / CELL_SIZE) + (newX.toInt() / CELL_SIZE)] = 0
     }
 
-    if (isWall(player.x, newY, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.DOOR) {
+    if (isWall(player.x, newY, currentMap.MAP, currentMap.MAP_X, currentMap.MAP_Y, CELL_SIZE) == WallType.DOOR) {
         // open door
-        MAP[MAP_X * (newY.toInt() / CELL_SIZE) + (player.x.toInt() / CELL_SIZE)] = 0
+        currentMap.MAP[currentMap.MAP_X * (newY.toInt() / CELL_SIZE) + (player.x.toInt() / CELL_SIZE)] = 0
     }
 
     // Exit
-    if (isWall(newX, player.y, MAP, MAP_X, MAP_Y, CELL_SIZE) == WallType.EXIT) {
+    if (isWall(newX, player.y, currentMap.MAP, currentMap.MAP_X, currentMap.MAP_Y, CELL_SIZE) == WallType.EXIT) {
         error("You win!")
     }
 

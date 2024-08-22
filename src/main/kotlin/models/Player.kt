@@ -1,14 +1,7 @@
 package models
 
-import CELL_SIZE
-import MAP
-import MAP_X
-import MAP_Y
-import PI
-import WallType
-import isWall
-import normalizeAngle
-import toRadian
+import engine.*
+import maps.Map
 import kotlin.math.cos
 import kotlin.math.sign
 import kotlin.math.sin
@@ -33,7 +26,7 @@ data class Player(
     val isMainPlayer: Boolean
 )
 
-fun Player.animate(state: PlayerState? = null) {
+fun Player.animate(state: PlayerState? = null, map: Map, cellSize: Int) {
     state?.let {
         this.state = it
     }
@@ -42,12 +35,14 @@ fun Player.animate(state: PlayerState? = null) {
         PlayerState.WALKING -> {
             this.walk()
             if (!isMainPlayer) {
-                this.walkRandom(MAP, MAP_X, MAP_Y, CELL_SIZE)
+                this.walkRandom(map, cellSize)
             }
         }
+
         PlayerState.SHOOTING -> {
             this.shoot()
         }
+
         PlayerState.DYING -> {
             this.dying(5)
         }
@@ -93,7 +88,7 @@ private fun Player.dying(frameCount: Int) {
 
 }
 
-private fun Player.dead(){
+private fun Player.dead() {
     this.state = PlayerState.DEAD
     dyingFrame = 4
 }
@@ -117,7 +112,7 @@ fun Player.inShotAngle(player: Player): Boolean {
 }
 
 
-fun Player.walkRandom(map: IntArray, mapW: Int, mapH: Int, cellSize: Int, buffer: Float = 0.2f) {
+fun Player.walkRandom(map: Map, cellSize: Int, buffer: Float = 0.2f) {
     // Calculate movement deltas based on current rotation
     val dx = 0.1f * cos(this.rotationRad)
     val dy = 0.1f * sin(this.rotationRad)
@@ -130,13 +125,13 @@ fun Player.walkRandom(map: IntArray, mapW: Int, mapH: Int, cellSize: Int, buffer
     var rotation = this.rotationRad
 
     // Check for wall collisions and apply buffer zone
-    if (isWall(newX + dx.sign * buffer, this.y, map, mapW, mapH, cellSize) == WallType.NONE) {
+    if (isWall(newX + dx.sign * buffer, this.y, map.MAP, map.MAP_X, map.MAP_Y, cellSize) == WallType.NONE) {
         this.x = newX
     } else {
         rotation = (rotation + 10.toRadian()).normalizeAngle()
     }
 
-    if (isWall(this.x, newY + dy.sign * buffer, map, mapW, mapH, cellSize) == WallType.NONE) {
+    if (isWall(this.x, newY + dy.sign * buffer, map.MAP, map.MAP_X, map.MAP_Y, cellSize) == WallType.NONE) {
         this.y = newY
     } else {
         rotation = (rotation + 10.toRadian()).normalizeAngle()
