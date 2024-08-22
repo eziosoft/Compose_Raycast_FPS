@@ -102,7 +102,7 @@ object GuardSprite : Sprite {
     }
 
     override fun getFrame(frameIndex: Int): IntArray? {
-        TODO("Not yet implemented")
+        TODO("Not needed for this sprite")
     }
 
     private fun getGuardStillTexture(direction: Int): IntArray {

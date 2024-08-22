@@ -1,47 +1,29 @@
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.toComposeImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import engine.*
 import engine.textures.readPpmImage
-import kotlinx.coroutines.delay
+import maps.*
 import maps.Map
-import maps.Map1
 import models.*
 import sprites.GuardSprite
 import sprites.PistolSprite
 import kotlin.math.*
-import kotlin.time.Duration
-import kotlin.time.DurationUnit
-import kotlin.time.measureTime
 
 
-val pressedKeys = mutableSetOf<Long>()
+const val W = 640
+const val H = 480
 
-private const val W = 640
-private const val H = 480
-private const val FPS = 60
 
 private val FOV_RAD = 60.toRadian()
 private const val MOVE_STEP = 0.2f
 private val ROTATION_STEP_RAD = 2f.toRadian()
 
-const val CELL_SIZE = 2
-const val TEXTURE_SIZE = 64 //walls, floor and ceiling textures
+
+private const val TEXTURE_SIZE = 64 //walls, floor and ceiling textures
+private val floorTexture = readPpmImage("textures/floor.ppm")
+private val cellingTexture = readPpmImage("textures/celling.ppm")
 
 
-private const val PLAYER_SIZE = 5f // square on the map
-
-// load textures
-
-val floorTexture = readPpmImage("textures/floor.ppm")
-val cellingTexture = readPpmImage("textures/celling.ppm")
-
-val currentMap: Map = Map1
+private const val CELL_SIZE = 2
+private val currentMap: Map = Map1
 
 
 private val wallDepths = FloatArray(W) // depth buffer
@@ -51,89 +33,36 @@ private val playerPosition =
         mapX = currentMap.MAP_X,
         mapY = currentMap.MAP_Y,
         cellSize = CELL_SIZE,
-        index = currentMap.MAP.indexOf(-1)
+        index = currentMap.MAP.indexOf(MapObject.player.id)
     )
 private val player =
     Player(
-        x = playerPosition.first,
-        y = playerPosition.second,
+        x = playerPosition[0],
+        y = playerPosition[1],
         rotationRad = -90f.toRadian().normalizeAngle(),
         isMainPlayer = true
     )
 
-private val enemies = getEnemiesFromMap()
-
-private var renderTime: Duration = Duration.ZERO
+private val enemies = currentMap.getEnemiesFromMap(cellSize = CELL_SIZE)
 
 
-fun findPositionBasedOnMapIndex(mapX: Int, mapY: Int, cellSize: Int, index: Int): Pair<Float, Float> {
-    val x = (index % mapX) * cellSize + cellSize / 2f
-    val y = (index / mapY) * cellSize + cellSize / 2f
-    return Pair(x, y)
-}
-
-fun getEnemiesFromMap(): List<Player> {
-    val enemies = mutableListOf<Player>()
-    currentMap.MAP.forEachIndexed { index, value ->
-        if (value == -2) {
-            val position = findPositionBasedOnMapIndex(currentMap.MAP_X, currentMap.MAP_Y, CELL_SIZE, index)
-            enemies.add(
-                Player(
-                    x = position.first,
-                    y = position.second,
-                    rotationRad = 0f,
-                    state = PlayerState.WALKING,
-                    isMainPlayer = false
-                )
-            )
-        }
+fun gameLoop(pressedKeys: Set<Long>, onFrame: (Screen) -> Unit) {
+    enemies.forEach { enemy ->
+        enemy.animate(map = currentMap, cellSize = CELL_SIZE)
     }
-    return enemies
-}
 
-
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-fun RayCaster() {
-
-    var frame by remember { mutableStateOf(Screen(W, H)) }
-
-
-    Image(
-        modifier = Modifier.fillMaxSize(),
-        bitmap = frame.getBitmap().toComposeImageBitmap(),
-        contentDescription = null,
-        contentScale = ContentScale.FillBounds,
-        filterQuality = FilterQuality.None,
-    )
-
-
-
-    LaunchedEffect(Unit) {
-        // game loop
-        while (true) {
-            renderTime = measureTime {
-
-                enemies.forEach { enemy ->
-                    enemy.animate(map = currentMap, cellSize = CELL_SIZE)
-                }
-
-                movePlayer(pressedKeys)
-                frame = generateFrame()
-
-            }
-            delay((1000 - renderTime.toLong(DurationUnit.MILLISECONDS)) / FPS.toLong())
-
-//            println("render time: $renderTime")
-        }
-    }
+    movePlayer(pressedKeys)
+    onFrame(generateFrame())
 }
 
 
 private fun generateFrame(): Screen {
     val screen = Screen(W, H)
 
+    // draw 3d
     castRays(player, screen)
+
+    // draw enemies based on distance
     enemies.sortedByDescending { it.distanceTo(player) }.forEach { enemy ->
         drawSprite(screen, player, enemy, wallDepths)
     }
@@ -146,11 +75,11 @@ private fun generateFrame(): Screen {
         player = player,
         enemies = enemies,
         cellSize = CELL_SIZE,
-        playerSize = PLAYER_SIZE
+        playerSize = 5f
     )
 
 
-    // pistol
+    // draw pistol
     screen.drawBitmap(
         bitmap = PistolSprite.getFrame(player.shootingFrame)!!,
         x = 2 * screen.w / 3 + (20 * sin(player.x)).toInt(),
@@ -160,6 +89,7 @@ private fun generateFrame(): Screen {
         transparentColor = PistolSprite.TRANSPARENT_COLOR
     )
 
+    // draw cross when enemy is in range
     enemies.forEach { enemy ->
         if (player.distanceTo(enemy) < 10 && player.inShotAngle(enemy)) {
             drawCross(screen)
@@ -168,7 +98,6 @@ private fun generateFrame(): Screen {
 
 
     player.animate(map = currentMap, cellSize = CELL_SIZE)
-//    println("${player.state}  ${player.shootingFrame}")
 
 
 //    drawText(bitmap, 10, 10, renderTime.toString(unit = DurationUnit.MILLISECONDS, decimals = 2), Color.White)
@@ -177,20 +106,20 @@ private fun generateFrame(): Screen {
     return screen
 }
 
-private fun drawCross(bitmap: Screen) {
+private fun drawCross(screen: Screen) {
     val crossSize = 10
     val crossColor = Screen.Color(255, 255, 255)
 
     val x = W / 2 - crossSize / 2
     val y = H / 2 - crossSize / 2
 
-    bitmap.drawLine(x, y, x + crossSize, y + crossSize, crossColor)
-    bitmap.drawLine(x + crossSize, y, x, y + crossSize, crossColor)
+    screen.drawLine(x, y, x + crossSize, y + crossSize, crossColor)
+    screen.drawLine(x + crossSize, y, x, y + crossSize, crossColor)
 }
 
 
 // draws square in 3d world using 3d projection mapping
-private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths: FloatArray) {
+private fun drawSprite(screen: Screen, player: Player, enemy: Player, wallDepths: FloatArray) {
     // Calculate the angle from the enemy to the player
     val angleToPlayer = atan2(player.y - enemy.y, player.x - enemy.x)
 
@@ -247,9 +176,7 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
             for (x in (screenX - perceivedWidth / 2)..(screenX + perceivedWidth / 2)) {
                 if (x >= 0 && x < W) {
                     // Only draw the sprite pixel if it's closer than the wall
-//                    println("$distance ${wallDepths[x]}")
-
-                    if (wallDepths[x] - (distance / CELL_SIZE) > -0.1) {
+                    if (wallDepths[x] - (distance / CELL_SIZE) > -0.1) { // -0.1 - padding to avoid wall clipping
                         // Calculate texture coordinates
                         val texX =
                             ((x - (screenX - perceivedWidth / 2)).toFloat() / perceivedWidth * GuardSprite.SPRITE_SIZE).toInt() % GuardSprite.SPRITE_SIZE
@@ -264,14 +191,12 @@ private fun drawSprite(bitmap: Screen, player: Player, enemy: Player, wallDepths
                             texture[texIndex + 2],
                         )
 
-
-
                         if (texColor != GuardSprite.TRANSPARENT_COLOR) {
                             // Apply distance-based shading
                             val intensity = (1.0f - (distance / 30.0f)).coerceIn(0.2f, 1f)
                             val shadedColor = darkenColor(texColor, intensity)
 
-                            bitmap.setRGB(x, y, shadedColor)
+                            screen.setRGB(x, y, shadedColor)
                         }
                     }
                 }
@@ -454,7 +379,7 @@ private fun castRays(player: Player, bitmap: Screen) {
 }
 
 
-// Helper function to darken a color based on intensity
+// Helper function to darken a color based on intensity used for shading
 private fun darkenColor(color: Screen.Color, intensity: Float): Screen.Color =
     Screen.Color(
         (color.red * intensity).toInt(),
