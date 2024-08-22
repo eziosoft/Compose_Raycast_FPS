@@ -477,8 +477,10 @@ class RaytracerEngine(
 
         enemies.forEach { enemy ->
             if (player.distanceTo(enemy) < 10 && player.inShotAngle(enemy)) {
-                enemy.state = PlayerState.DYING
-                playSound("sound/mandeathscream.mp3")
+                if (enemy.state != PlayerState.DEAD) {
+                    enemy.state = PlayerState.DYING
+                    playSound("sound/mandeathscream.mp3")
+                }
             }
         }
     }
